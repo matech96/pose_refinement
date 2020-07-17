@@ -96,7 +96,7 @@ class BaseMPJPECalculator(BaseCallback):
         assert self.pctiles[-1] == 99, "Currently the last percentile is hardcoded to be 99 for printing"
 
         sequence_mpjpes, sequence_pcks, sequence_pctiles, joint_means, joint_pctiles = \
-            eval_results(preds, self.data_3d_mm, self.joint_set, pctiles=self.pctiles, verbose=verbose)
+            eval_results(preds, self.data_3d_mm, self.joint_set, pctiles=self.pctiles, verbose=verbose, pck_threshold=PCK_THRESHOLD)
         self.losses_to_log[self.prefix + '_mrpe'] = np.mean([mrpe(preds[s], self.data_3d_mm[s], self.joint_set)
                                                              for s in preds])
 
