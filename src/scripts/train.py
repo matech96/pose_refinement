@@ -191,7 +191,7 @@ def run_experiment(output_path, _config, exp: Experiment):
 
     model_path = os.path.join(output_path, "model_params.pkl")
     torch.save(model.state_dict(), model_path)
-    exp.log_model(model_path)
+    exp.log_model('model', model_path)
 
     save(
         output_path + "/test_results.pkl",
