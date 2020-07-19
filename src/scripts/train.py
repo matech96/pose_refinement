@@ -20,6 +20,8 @@ from util.misc import save, ensuredir
 import copy
 from collections import Iterable
 
+from scripts import eval
+
 
 def flatten_params(params):
     res = copy.copy(params)
@@ -203,7 +205,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     )
 
 
-def main(output_path):
+def main(output_path, exp):
     params = {
         "num_epochs": 80,
         "preprocess_2d": "DepthposeNormalize2D",
@@ -234,15 +236,23 @@ def main(output_path):
         },
     }
 
-    exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
     run_experiment(output_path, params, exp)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-o", "--output", default="../output", help="folder to save the model to"
+        "-o", "--output", help="folder to save the model to"
     )
     args = parser.parse_args()
 
-    main(args.output)
+    exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
+
+    if args.output is None:
+        output_path = f"../models/{exp.get_key()}"
+    else:
+        output_path = args.output
+
+    main(output_path, exp)
+    eval.main(output_path, False, exp)
+    eval.main(output_path, True, exp)

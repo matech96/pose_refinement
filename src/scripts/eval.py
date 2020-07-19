@@ -2,8 +2,12 @@
 """
 Evaluates a (not end2end) model on MuPo-TS
 """
+from comet_ml import Experiment
 import argparse
 import os
+import sys
+
+sys.path.append("/workspace/src")
 
 import numpy as np
 import torch
@@ -17,7 +21,7 @@ from model.videopose import TemporalModel
 from training.callbacks import TemporalMupotsEvaluator
 from training.preprocess import get_postprocessor, SaveableCompose, MeanNormalize3D
 
-LOG_PATH = '../models'
+LOG_PATH = "../models"
 
 
 def unstack_mupots_poses(dataset, predictions):
@@ -35,32 +39,39 @@ def unstack_mupots_poses(dataset, predictions):
     pred_3d = {}
     for seq in range(1, 21):
         gt = mupots_3d.load_gt_annotations(seq)
-        gt_len = len(gt['annot2'])
+        gt_len = len(gt["annot2"])
 
         pred_2d[seq] = []
         pred_3d[seq] = []
 
-        seq_inds = (dataset.index.seq_num == seq)
+        seq_inds = dataset.index.seq_num == seq
         for i in range(gt_len):
-            frame_inds = (dataset.index.frame == i)
+            frame_inds = dataset.index.frame == i
             valid = dataset.good_poses & seq_inds & frame_inds
 
             pred_2d[seq].append(dataset.poses2d[valid, :, :2][:, COCO_TO_MUPOTS])
-            pred_3d[seq].append(predictions[seq][frame_inds[dataset.good_poses & seq_inds]])
+            pred_3d[seq].append(
+                predictions[seq][frame_inds[dataset.good_poses & seq_inds]]
+            )
 
     return pred_2d, pred_3d
 
 
 def load_model(model_folder):
-    config = load(os.path.join(LOG_PATH, model_folder, 'config.json'))
-    path = os.path.join(LOG_PATH, model_folder, 'model_params.pkl')
+    config = load(os.path.join(LOG_PATH, model_folder, "config.json"))
+    path = os.path.join(LOG_PATH, model_folder, "model_params.pkl")
 
     # Input/output size calculation is hacky
     weights = torch.load(path)
-    num_in_features = weights['expand_conv.weight'].shape[1]
+    num_in_features = weights["expand_conv.weight"].shape[1]
 
-    m = TemporalModel(num_in_features, MuPoTSJoints.NUM_JOINTS, config['model']['filter_widths'],
-                      dropout=config['model']['dropout'], channels=config['model']['channels'])
+    m = TemporalModel(
+        num_in_features,
+        MuPoTSJoints.NUM_JOINTS,
+        config["model"]["filter_widths"],
+        dropout=config["model"]["dropout"],
+        channels=config["model"]["channels"],
+    )
 
     m.cuda()
     m.load_state_dict(weights)
@@ -70,16 +81,19 @@ def load_model(model_folder):
 
 
 def get_dataset(config):
-    data = PersonStackedMuPoTsDataset(config['pose2d_type'], config.get('pose3d_scaling', 'normal'),
-                                      pose_validity='all')
+    data = PersonStackedMuPoTsDataset(
+        config["pose2d_type"],
+        config.get("pose3d_scaling", "normal"),
+        pose_validity="all",
+    )
     return data
 
 
-def main(model_name, pose_refine):
+def main(model_name, pose_refine, exp: Experiment):
     config, m = load_model(model_name)
     test_set = get_dataset(config)
 
-    params_path = os.path.join(LOG_PATH, str(model_name), 'preprocess_params.pkl')
+    params_path = os.path.join(LOG_PATH, str(model_name), "preprocess_params.pkl")
     transform = SaveableCompose.from_file(params_path, test_set, globals())
     test_set.transform = transform
 
@@ -88,15 +102,23 @@ def main(model_name, pose_refine):
 
     post_process_func = get_postprocessor(config, test_set, normalizer3d)
 
-    logger = TemporalMupotsEvaluator(m, test_set, config['model']['loss'], True, post_process3d=post_process_func)
+    logger = TemporalMupotsEvaluator(
+        m,
+        test_set,
+        config["model"]["loss"],
+        True,
+        post_process3d=post_process_func,
+        prefix="NR",
+    )
     logger.eval(calculate_scale_free=not pose_refine, verbose=not pose_refine)
 
     if pose_refine:
-        refine_config = load('../models/pose_refine_config.json')
-        pred = np.concatenate([logger.preds[i] for i in range(1,21)])
+        refine_config = load("../models/pose_refine_config.json")
+        pred = np.concatenate([logger.preds[i] for i in range(1, 21)])
         pred = optimize_poses(pred, test_set, refine_config)
-        l = StackedArrayAllMupotsEvaluator(pred, test_set, True)
+        l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
         l.eval(calculate_scale_free=True, verbose=True)
+        exp.log_metrics(l.losses_to_log)
 
         pred_by_seq = {}
         for seq in range(1, 21):
@@ -105,22 +127,45 @@ def main(model_name, pose_refine):
         pred_2d, pred_3d = unstack_mupots_poses(test_set, pred_by_seq)
     else:
         pred_2d, pred_3d = unstack_mupots_poses(test_set, logger.preds)
+        exp.log_metrics(logger.losses_to_log)
 
     print("\nR-PCK  R-AUC  A-PCK  A-AUC")
+    keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
+    values = []
     for relative in [True, False]:
-        pcks, aucs = mupots_3d.eval_poses(False, relative, 'annot3' if config['pose3d_scaling'] == 'normal' else 'univ_annot3',
-                                          pred_2d, pred_3d, keep_matching=True)
+        pcks, aucs = mupots_3d.eval_poses(
+            False,
+            relative,
+            "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
+            pred_2d,
+            pred_3d,
+            keep_matching=True,
+        )
         pck = np.mean(list(pcks.values()))
         auc = np.mean(list(aucs.values()))
+        values.append(pck)
+        values.append(auc)
 
-        print(" %4.1f   %4.1f  " % (pck, auc), end='')
+        print(" %4.1f   %4.1f  " % (pck, auc), end="")
     print()
+
+    prefix = "R" if pose_refine else "NR"
+    exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('model_name', help="Name of the model (either 'normal' or 'universal')")
-    parser.add_argument('-r', '--pose-refine', action='store_true', help='Apply pose-refinement after TPN')
+    parser.add_argument(
+        "model_name", help="Name of the model (either 'normal' or 'universal')"
+    )
+    parser.add_argument(
+        "-r",
+        "--pose-refine",
+        action="store_true",
+        help="Apply pose-refinement after TPN",
+    )
     args = parser.parse_args()
 
-    main(args.model_name, args.pose_refine)
+    exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
+
+    main(args.model_name, args.pose_refine, exp)

@@ -3,6 +3,6 @@ datasets
 models
 output
 .workspace/*
-.vscode/launch.json
+.vscode/.ropeproject/*
 .virtual_documents/*
 src/notebooks/*
