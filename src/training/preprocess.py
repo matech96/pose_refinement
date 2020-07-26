@@ -183,8 +183,16 @@ class BaseNormalizer(object):
         return {'mean': self.mean, 'std': self.std, 'field_name': self.field_name}
 
     def __call__(self, sample):
-        sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
-        return sample
+        # sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
+        # return sample
+        if self.field_name == 'pose2d':
+            pos_mask = np.ones(sample['pose2d'].shape[1:], dtype=bool)
+            pos_mask[2::3] = False
+            sample[self.field_name][:, pos_mask] = (sample[self.field_name][:, pos_mask] - self.mean[pos_mask]) / self.std[pos_mask]
+            return sample
+        else:
+            sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
+            return sample
 
 
 class MeanNormalize2D(BaseNormalizer):

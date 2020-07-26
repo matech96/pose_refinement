@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import numpy as np
 from comet_ml import Experiment
 
 sys.path.append("/workspace/src")
@@ -12,6 +13,7 @@ from databases.datasets import (
     ConcatPoseDataset,
 )
 from model.videopose import TemporalModel, TemporalModelOptimized1f
+from model.pose_refinement import capped_l2_euc_err, step_zero_velocity_loss
 from training.callbacks import preds_from_logger, ModelCopyTemporalEvaluator
 from training.loaders import ChunkedGenerator
 from training.preprocess import *
@@ -39,7 +41,8 @@ def flatten_params(params):
 
 
 def calc_loss(model, batch, config):
-    if config["model"]["loss"] == "l1_nan":
+    loss_type = config["model"]["loss"]
+    if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
         gt_3d = batch["pose3d"]
 
@@ -57,19 +60,38 @@ def calc_loss(model, batch, config):
             pose2d = torch.from_numpy(pose2d).to("cuda")
             gt_3d = torch.from_numpy(gt_3d).to("cuda")
 
-    elif config["model"]["loss"] == "l1":
-        pose2d = batch["temporal_pose2d"]
-        gt_3d = batch["pose3d"]
+    elif (loss_type == "l1") or (loss_type == "smooth"):
+        pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
+        gt_3d = batch["pose3d"]  # [1024, 1, 51]
         pose2d = pose2d.to("cuda")
         gt_3d = gt_3d.to("cuda")
 
     # forward pass
-    pred_3d = model(pose2d)
+    pred_3d = model(pose2d)  # [1024, 1, 51]
 
-    if config["model"]["loss"] == "l1":
+    if loss_type == "l1":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
-    elif config["model"]["loss"] == "l1_nan":
+    elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
+    elif loss_type == "smooth":
+        _conf_l2_cap = 1
+        _conf_large_step = 20
+        _conf_alpha_1 = 0.1
+        _conf_alpha_2 = 1
+        v = torch.mean(pose2d[:, 0, 2::3], dim=1)
+
+        e_pred = capped_l2_euc_err(
+            pred_3d, gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
+        )
+        e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
+        e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
+
+        loss_3d = (
+            torch.sum(v * e_pred)
+            + _conf_alpha_1 * torch.sum((1 - v[-len(e_smooth_large):]) * e_smooth_large)
+            + _conf_alpha_2 * torch.sum(e_smooth_small)
+        )
+        # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     else:
         raise Exception("Unknown pose loss: " + str(config["model"]["loss"]))
 
@@ -171,7 +193,11 @@ def run_experiment(output_path, _config, exp: Experiment):
 
     pad = (model.receptive_field() - 1) // 2
     train_loader = ChunkedGenerator(
-        train_data, _config["batch_size"], pad, _config["train_time_flip"], shuffle=True
+        train_data,
+        _config["batch_size"],
+        pad,
+        _config["train_time_flip"],
+        shuffle=_config["shuffle"],
     )
     tester = ModelCopyTemporalEvaluator(
         test_model,
@@ -193,7 +219,7 @@ def run_experiment(output_path, _config, exp: Experiment):
 
     model_path = os.path.join(output_path, "model_params.pkl")
     torch.save(model.state_dict(), model_path)
-    exp.log_model('model', model_path)
+    exp.log_model("model", model_path)
 
     save(
         output_path + "/test_results.pkl",
@@ -210,6 +236,7 @@ def main(output_path, exp):
         "num_epochs": 80,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+        "shuffle": False,
         # training
         "optimiser": "adam",
         "adam_amsgrad": True,
@@ -228,7 +255,7 @@ def main(output_path, exp):
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
-            "loss": "l1",
+            "loss": "smooth",
             "channels": 1024,
             "dropout": 0.25,
             "filter_widths": [3, 3, 3, 3],
@@ -241,9 +268,7 @@ def main(output_path, exp):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-o", "--output", help="folder to save the model to"
-    )
+    parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
     exp = Experiment(workspace="pose-refinement", project_name="00-baseline")

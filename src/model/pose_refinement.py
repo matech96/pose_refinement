@@ -154,9 +154,9 @@ def optimize_poses(pred3d, data, _config, **kwargs):
         kp_score = np.mean(data.poses2d[inds, :, 2], axis=-1)
         if _config['smooth_visibility']:
             kp_score = ndimage.median_filter(kp_score, 9)
-        kp_score = torch.from_numpy(kp_score).cuda()
-        poses_init = torch.from_numpy(poses_init).cuda()
-        poses_pred = torch.from_numpy(poses_pred).cuda()
+        kp_score = torch.from_numpy(kp_score).cuda() # [201]
+        poses_init = torch.from_numpy(poses_init).cuda() # [201, 17, 3]
+        poses_pred = torch.from_numpy(poses_pred).cuda() # [201, 17, 3]
         scale = torch.ones((len(kp_score), 1, 1))
 
         poses_init.requires_grad = False
