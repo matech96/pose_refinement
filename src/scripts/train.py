@@ -89,6 +89,8 @@ def calc_loss(model, batch, config, mean_2d, std_2d):
         )
         e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
         e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
+        if len(e_smooth_large) == 0:
+            e_smooth_large = torch.tensor([0.0]).cuda()
 
         loss_3d = (
             torch.mean(v * e_pred)
@@ -240,7 +242,7 @@ def main(output_path, exp):
         "num_epochs": 15,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": False,
+        "shuffle": True,
         # training
         "optimiser": "adam",
         "adam_amsgrad": True,

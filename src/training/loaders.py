@@ -92,14 +92,38 @@ class ChunkedGenerator:
         return len(self.dataset)//self.batch_size
 
     def __iter__(self):
+        SUB_BATCH = 1
+
         N = len(self.dataset)
         num_batch = N//self.batch_size
 
-        indices = np.arange(N)
+        idxs = np.arange(len(self.frame_start))
+        sub_batch_size = self.batch_size // SUB_BATCH
+        ###
+        indices = []
+        for start_idx in np.unique(self.frame_start):
+            frame_idx = idxs[self.frame_start == start_idx]
+            if len(frame_idx) > sub_batch_size:
+                split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
+                batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
+                indices += list(frame_idx[i : j] for i, j in batch_start_end_idx if ((j is not None) and (j - i > 1)) or ((j is None) and (len(frame_idx) - i > 1)))
+            else:
+                indices.append(frame_idx)
+        ### TODO remove
+        # indices2 = []
+        # for start_idx in np.unique(self.frame_start):
+        #     frame_idx = idxs[self.frame_start == start_idx]
+        #     if len(frame_idx) > sub_batch_size:
+        #         split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
+        #         batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
+        #         indices2 += list(frame_idx[i : j] for i, j in batch_start_end_idx)
+        #     else:
+        #         indices2.append(frame_idx)
+        ###
+        # indices = np.arange(N)
         if self.shuffle:
             np.random.shuffle(indices)
 
-        SUB_BATCH = 4
         assert self.batch_size % SUB_BATCH == 0, "SUB_BATCH must divide batch_size"
 
         class LoadingDataset:
@@ -108,14 +132,16 @@ class ChunkedGenerator:
 
             def __getitem__(iself, ind):
                 sub_batch_size = self.batch_size//SUB_BATCH
-                batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]  # (nBatch,)
+                batch_inds = indices[ind]  # (nBatch,)
                 batch_frame_start = self.frame_start[batch_inds][:, np.newaxis]
                 batch_frame_end = self.frame_end[batch_inds][:, np.newaxis]
+                assert len(np.unique(batch_frame_start)) == 1
+                assert len(np.unique(batch_frame_end)) == 1
 
                 if self.augment:
-                    flip = np.random.random(sub_batch_size) < 0.5
+                    flip = np.random.random(len(batch_inds)) < 0.5
                 else:
-                    flip = np.zeros(sub_batch_size, dtype='bool')
+                    flip = np.zeros(len(batch_inds), dtype='bool')
                 flip = np.tile(flip[:, np.newaxis], (1, 2*self.pad+1))
 
                 # expand batch_inds such that it includes lower&upper bound indices for every element
@@ -138,7 +164,7 @@ class ChunkedGenerator:
 
         wrapper_dataset = LoadingDataset()
         loader = DataLoader(wrapper_dataset, sampler=SequentialSampler(wrapper_dataset), 
-                            batch_size=SUB_BATCH, num_workers=4)
+                            batch_size=SUB_BATCH, num_workers=0) # TODO reset num_workers to 4
 
         for chunk_pose2d, chunk_pose3d, chunk_valid in loader:
             chunk_pose2d = chunk_pose2d.reshape((-1,)+chunk_pose2d.shape[2:])

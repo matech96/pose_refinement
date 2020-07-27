@@ -22,7 +22,8 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "/workspace/src"
+            "cwd": "/workspace/src",
+            "justMyCode": false
         }
     ]
 }
