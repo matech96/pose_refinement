@@ -208,7 +208,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         test_data,
         _config["model"]["loss"],
         _config["test_time_flip"],
-        post_process3d=get_postprocessor(_config, test_data, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
+        post_process3d=get_postprocessor(_config, test_data, normalizer3d),
         prefix="test",
     )
 
@@ -216,7 +216,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config, normalizer2d),
+        lambda m, b: calc_loss(m, b, _config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
         _config,
         callbacks=[tester],
     )
