@@ -421,8 +421,8 @@ class Mpi3dTrainDataset(FlippableDataset, TemporalAugmentMixin):
         sequences = []
 
         calibs = mpii_3dhp.get_calibration_matrices()
-        for sub in range(1, 9):
-            for seq in range(1, 3):
+        for sub in range(1, 9): # S1, ..., S8
+            for seq in range(1, 3): # 2 sequence per S
                 gt = mpii_3dhp.train_ground_truth(sub, seq)
                 for cam in range(11):
                     # In S3/Seq2 cam2 there are some frame between 9400-9900 where the pose is

@@ -40,7 +40,7 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
         cx = cx.reshape(shape)
         cy = cy.reshape(shape)
 
-    data = data[..., joint_set.TO_COMMON14, :]
+    data = data[..., joint_set.TO_COMMON14, :] # (1098610, 19, 3) -> (1098610, 14, 3)
 
     # This is 100ms
     data[..., :, 0] -= cx
@@ -51,7 +51,7 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
     root_ind = np.where(Common14Joints.NAMES == root_name)[0][0]
     root2d = data[..., root_ind, :].copy()  # negligible
     # 70ms
-    data = remove_root_keepscore(data, root_ind)  # (nPoses, 13, 3), modifies data
+    data = remove_root_keepscore(data, root_ind)  # (nPoses, 13, 3), modifies data, (1098610, 13, 3)
     # print(data.dtype)
 
     # negligible
@@ -71,9 +71,9 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
     # print(data.dtype)
 
     # stack root next to the pose
-    data = data.reshape(data.shape[:-2] + (-1,))  # (nPoses, 13*3)
+    data = data.reshape(data.shape[:-2] + (-1,))  # (nPoses, 13*3) (1098610, 39)
     # negligible/70ms
-    data = np.concatenate([data, root2d], axis=-1)  # (nPoses, 14*3)
+    data = np.concatenate([data, root2d], axis=-1)  # (nPoses, 14*3) (1098610, 42)
     return data
 
 
@@ -183,16 +183,16 @@ class BaseNormalizer(object):
         return {'mean': self.mean, 'std': self.std, 'field_name': self.field_name}
 
     def __call__(self, sample):
-        # sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
-        # return sample
-        if self.field_name == 'pose2d':
-            pos_mask = np.ones(sample['pose2d'].shape[1:], dtype=bool)
-            pos_mask[2::3] = False
-            sample[self.field_name][:, pos_mask] = (sample[self.field_name][:, pos_mask] - self.mean[pos_mask]) / self.std[pos_mask]
-            return sample
-        else:
-            sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
-            return sample
+        sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
+        return sample
+        # if self.field_name == 'pose2d':
+        #     pos_mask = np.ones(sample['pose2d'].shape[1:], dtype=bool)
+        #     pos_mask[2::3] = False
+        #     sample[self.field_name][:, pos_mask] = (sample[self.field_name][:, pos_mask] - self.mean[pos_mask]) / self.std[pos_mask]
+        #     return sample
+        # else:
+        #     sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
+        #     return sample
 
 
 class MeanNormalize2D(BaseNormalizer):

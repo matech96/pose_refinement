@@ -40,7 +40,7 @@ def flatten_params(params):
     return res
 
 
-def calc_loss(model, batch, config):
+def calc_loss(model, batch, config, mean_2d, std_2d):
     loss_type = config["model"]["loss"]
     if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
@@ -68,6 +68,7 @@ def calc_loss(model, batch, config):
 
     # forward pass
     pred_3d = model(pose2d)  # [1024, 1, 51]
+    assert (pose2d.shape[1] % 2) == 1
 
     if loss_type == "l1":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
@@ -78,7 +79,10 @@ def calc_loss(model, batch, config):
         _conf_large_step = 20
         _conf_alpha_1 = 0.1
         _conf_alpha_2 = 1
-        v = torch.mean(pose2d[:, 0, 2::3], dim=1)
+        middle_channel = pose2d.shape[1] // 2 + 1
+        normalized_probs = pose2d[:, middle_channel, 2::3]
+        unnormalized_probs = normalized_probs * std_2d + mean_2d
+        v = torch.mean(unnormalized_probs, dim=1)
 
         e_pred = capped_l2_euc_err(
             pred_3d, gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
@@ -87,9 +91,9 @@ def calc_loss(model, batch, config):
         e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
 
         loss_3d = (
-            torch.sum(v * e_pred)
-            + _conf_alpha_1 * torch.sum((1 - v[-len(e_smooth_large):]) * e_smooth_large)
-            + _conf_alpha_2 * torch.sum(e_smooth_small)
+            torch.mean(v * e_pred)
+            + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
+            + _conf_alpha_2 * torch.mean(e_smooth_small)
         )
         # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     else:
@@ -204,7 +208,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         test_data,
         _config["model"]["loss"],
         _config["test_time_flip"],
-        post_process3d=get_postprocessor(_config, test_data, normalizer3d),
+        post_process3d=get_postprocessor(_config, test_data, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
         prefix="test",
     )
 
@@ -212,7 +216,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config),
+        lambda m, b: calc_loss(m, b, _config, normalizer2d),
         _config,
         callbacks=[tester],
     )
@@ -233,10 +237,10 @@ def run_experiment(output_path, _config, exp: Experiment):
 
 def main(output_path, exp):
     params = {
-        "num_epochs": 80,
+        "num_epochs": 15,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": False,
+        "shuffle": True,
         # training
         "optimiser": "adam",
         "adam_amsgrad": True,
@@ -256,9 +260,9 @@ def main(output_path, exp):
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
             "loss": "smooth",
-            "channels": 1024,
+            "channels": 512,
             "dropout": 0.25,
-            "filter_widths": [3, 3, 3, 3],
+            "filter_widths": [3, 3, 3],
             "layernorm": False,
         },
     }
