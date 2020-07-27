@@ -240,7 +240,7 @@ def main(output_path, exp):
         "num_epochs": 15,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": True,
+        "shuffle": False,
         # training
         "optimiser": "adam",
         "adam_amsgrad": True,
