@@ -259,7 +259,7 @@ if __name__ == "__main__":
         "adam_amsgrad": True,
         "learning_rate": 1e-3,
         "sgd_momentum": 0,
-        "batch_size": 1024,
+        "batch_size": 256,
         "train_time_flip": True,
         "test_time_flip": True,
         "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
