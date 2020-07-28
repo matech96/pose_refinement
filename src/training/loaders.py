@@ -122,8 +122,8 @@ class ChunkedGenerator:
 
             def __getitem__(iself, ind):
                 sub_batch_size = self.batch_size//SUB_BATCH
-                # batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
-                batch_inds = indices[ind]  # (nBatch,)
+                batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
+                # batch_inds = indices[ind]  # (nBatch,)
                 batch_frame_start = self.frame_start[batch_inds][:, np.newaxis]
                 batch_frame_end = self.frame_end[batch_inds][:, np.newaxis]
                 assert len(np.unique(batch_frame_start)) == 1
