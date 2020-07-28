@@ -99,28 +99,18 @@ class ChunkedGenerator:
 
         idxs = np.arange(len(self.frame_start))
         sub_batch_size = self.batch_size // SUB_BATCH
-        ###
-        indices = []
-        for start_idx in np.unique(self.frame_start):
-            frame_idx = idxs[self.frame_start == start_idx]
-            if len(frame_idx) > sub_batch_size:
-                split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
-                batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
-                indices += list(frame_idx[i : j] for i, j in batch_start_end_idx if ((j is not None) and (j - i > 1)) or ((j is None) and (len(frame_idx) - i > 1)))
-            else:
-                indices.append(frame_idx)
-        ### TODO remove
-        # indices2 = []
+        # indices = []
         # for start_idx in np.unique(self.frame_start):
         #     frame_idx = idxs[self.frame_start == start_idx]
         #     if len(frame_idx) > sub_batch_size:
         #         split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
         #         batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
-        #         indices2 += list(frame_idx[i : j] for i, j in batch_start_end_idx)
+        #         indices += list(frame_idx[i : j] for i, j in batch_start_end_idx if ((j is not None) and (j - i > 1)) or ((j is None) and (len(frame_idx) - i > 1)))
         #     else:
-        #         indices2.append(frame_idx)
-        ###
-        # indices = np.arange(N)
+        #         indices.append(frame_idx)
+
+        indices = np.arange(N)
+
         if self.shuffle:
             np.random.shuffle(indices)
 
@@ -132,6 +122,7 @@ class ChunkedGenerator:
 
             def __getitem__(iself, ind):
                 sub_batch_size = self.batch_size//SUB_BATCH
+                # batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
                 batch_inds = indices[ind]  # (nBatch,)
                 batch_frame_start = self.frame_start[batch_inds][:, np.newaxis]
                 batch_frame_end = self.frame_end[batch_inds][:, np.newaxis]
