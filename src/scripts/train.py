@@ -238,7 +238,7 @@ def run_experiment(output_path, _config, exp: Experiment):
 
 
 if __name__ == "__main__":
-    for lr in [1e-2, 1e-3, 1e-4, 1e-5]:
+    for lr in [1e-3, 1e-4, 1e-2, 1e-5]:
         parser = argparse.ArgumentParser()
         parser.add_argument("-o", "--output", help="folder to save the model to")
         args = parser.parse_args()
