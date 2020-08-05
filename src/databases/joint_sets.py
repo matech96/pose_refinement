@@ -22,7 +22,7 @@ class JointSet:
         return data
 
 
-class MuPoTSJoints(JointSet):
+class MuPoTSJoints(JointSet): # 3D
     NAMES = np.array(["head_top", 'neck', 'right_shoulder', 'right_elbow', 'right_wrist',  # 0-4
                       'left_shoulder', 'left_elbow', 'left_wrist',  # 5-7
                       'right_hip', 'right_knee', 'right_ankle', 'left_hip', 'left_knee', 'left_ankle',  # 8-13
@@ -82,7 +82,7 @@ class PanopticJoints(JointSet):
     NAMES.flags.writeable = False
 
 
-class CocoExJoints(JointSet):
+class CocoExJoints(JointSet): # 2D
     NAMES = np.array(["nose", "left_eye", "right_eye", "left_ear", "right_ear",  # 0-4
                       "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist",  # 5-10
                       "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle",  # 11-16
