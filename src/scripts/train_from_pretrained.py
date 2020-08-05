@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import numpy as np
+import copy
 from comet_ml import Experiment
 
 sys.path.append("/workspace/src")
@@ -22,92 +23,17 @@ from util.misc import save, ensuredir
 import copy
 from collections import Iterable
 
-from scripts import eval
-
-
-def flatten_params(params):
-    res = copy.copy(params)
-    to_flatten = [k for k, v in params.items() if isinstance(v, dict)]
-    for k in to_flatten:
-        poped = res.pop(k)
-        for pk, pv in poped.items():
-            new_key = f"{k}_{pk}"
-            if isinstance(pv, Iterable) and not isinstance(pv, str):
-                for i, pvi in enumerate(pv):
-                    res[f"{new_key}_{i}"] = pvi
-            else:
-                res[new_key] = pv
-    return res
-
-
-def calc_loss(model, batch, config, mean_2d, std_2d):
-    loss_type = config["model"]["loss"]
-    if loss_type == "l1_nan":
-        pose2d = batch["temporal_pose2d"]
-        gt_3d = batch["pose3d"]
-
-        # different handling for numpy and PyTorch inputs
-        if isinstance(pose2d, torch.Tensor):
-            inds = torch.all(torch.all(1 - (pose2d != pose2d), dim=(-1)), dim=-1)
-            pose2d = pose2d[inds]
-            gt_3d = gt_3d[inds]
-            pose2d = pose2d.to("cuda")
-            gt_3d = gt_3d.to("cuda")
-        else:
-            inds = np.all(~np.isnan(pose2d), axis=(-1, -2))
-            pose2d = pose2d[inds]
-            gt_3d = gt_3d[inds]
-            pose2d = torch.from_numpy(pose2d).to("cuda")
-            gt_3d = torch.from_numpy(gt_3d).to("cuda")
-
-    elif (loss_type == "l1") or (loss_type == "smooth"):
-        pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
-        gt_3d = batch["pose3d"]  # [1024, 1, 51]
-        pose2d = pose2d.to("cuda")
-        gt_3d = gt_3d.to("cuda")
-
-    # forward pass
-    pred_3d = model(pose2d)  # [1024, 1, 51]
-    assert (pose2d.shape[1] % 2) == 1
-
-    if loss_type == "l1":
-        loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
-    elif loss_type == "l1_nan":
-        loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
-    elif loss_type == "smooth":
-        _conf_l2_cap = 1
-        _conf_large_step = 20
-        _conf_alpha_1 = 0.1
-        _conf_alpha_2 = 1
-        middle_channel = pose2d.shape[1] // 2 + 1
-        normalized_probs = pose2d[:, middle_channel, 2::3]
-        unnormalized_probs = normalized_probs * std_2d + mean_2d
-        v = torch.mean(unnormalized_probs, dim=1)
-
-        e_pred = capped_l2_euc_err(
-            pred_3d, gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
-        )
-        e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
-        e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
-        if len(e_smooth_large) == 0:
-            e_smooth_large = torch.tensor([0.0]).cuda()
-
-        loss_3d = (
-            torch.mean(v * e_pred)
-            + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
-            + _conf_alpha_2 * torch.mean(e_smooth_small)
-        )
-        # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
-    else:
-        raise Exception("Unknown pose loss: " + str(config["model"]["loss"]))
-
-    return loss_3d, {"loss_3d": loss_3d.item()}
+from scripts import eval, train
+LOG_PATH = "../models"
 
 
 def run_experiment(output_path, _config, exp: Experiment):
-    exp.log_parameters(flatten_params(_config))
+    exp.log_parameters(train.flatten_params(_config))
     save(os.path.join(output_path, "config.json"), _config)
     ensuredir(output_path)
+
+    config, m = eval.load_model(_config["model"]['weights'])
+
 
     if _config["train_data"] == "mpii_train":
         print("Training data is mpii-train")
@@ -145,25 +71,10 @@ def run_experiment(output_path, _config, exp: Experiment):
         train_data.augment(False)
 
     # Load the preprocessing steps
-    train_data.transform = None
-    transforms_train = [
-        decode_trfrm(_config["preprocess_2d"], globals())(train_data, cache=False),
-        decode_trfrm(_config["preprocess_3d"], globals())(train_data, cache=False),
-    ]
-
-    normalizer2d = transforms_train[0].normalizer
-    normalizer3d = transforms_train[1].normalizer
-
-    transforms_test = [
-        decode_trfrm(_config["preprocess_2d"], globals())(test_data, normalizer2d),
-        decode_trfrm(_config["preprocess_3d"], globals())(test_data, normalizer3d),
-    ]
-
-    transforms_train.append(RemoveIndex())
-    transforms_test.append(RemoveIndex())
-
-    train_data.transform = SaveableCompose(transforms_train)
-    test_data.transform = SaveableCompose(transforms_test)
+    params_path = os.path.join(LOG_PATH, _config["model"]['weights'], "preprocess_params.pkl")
+    # transform = SaveableCompose.from_file(params_path, test_data, globals())
+    train_data.transform = SaveableCompose.from_file(params_path, train_data, globals())
+    test_data.transform = SaveableCompose.from_file(params_path, test_data, globals())
 
     # save normalisation params
     save(output_path + "/preprocess_params.pkl", train_data.transform.state_dict())
@@ -183,6 +94,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         channels=_config["model"]["channels"],
         layernorm=_config["model"]["layernorm"],
     )
+    model.load_state_dict(m.state_dict())
     test_model = TemporalModel(
         train_data[[0]]["pose2d"].shape[-1],
         MuPoTSJoints.NUM_JOINTS,
@@ -196,6 +108,9 @@ def run_experiment(output_path, _config, exp: Experiment):
     test_model.cuda()
 
     save(output_path + "/model_summary.txt", str(model))
+
+    normalizer2d = train_data.transform.transforms[0].normalizer
+    normalizer3d = train_data.transform.transforms[1].normalizer
 
     pad = (model.receptive_field() - 1) // 2
     train_loader = ChunkedGenerator(
@@ -218,7 +133,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
+        lambda m, b: train.calc_loss(m, b, _config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
         _config,
         callbacks=[tester],
     )
@@ -242,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
+    exp = Experiment(workspace="pose-refinement", project_name="02-batch-shuffle-pretrained")
 
     if args.output is None:
         output_path = f"../models/{exp.get_key()}"
@@ -272,6 +187,7 @@ if __name__ == "__main__":
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
+            "weights": "9854c3528e404d6c8fe576ea76e1bb30",
             "loss": "l1",
             "channels": 512,
             "dropout": 0.25,
