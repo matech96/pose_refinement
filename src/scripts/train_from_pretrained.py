@@ -139,6 +139,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         pad,
         _config["train_time_flip"],
         shuffle=_config["shuffle"],
+        ordered_batch=_config["ordered_batch"],
     )
     tester = ModelCopyTemporalEvaluator(
         test_model,
@@ -177,46 +178,48 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    for _ in range(2):
-        for lr in [1e-3, 1e-4, 1e-5]:
-            exp = Experiment(workspace="pose-refinement", project_name="01-batch-shuffle-batchsize")
+    # for _ in range(2):
+    #     for lr in [1e-3, 1e-4, 1e-5]:
+    for ordered_batch in [True, False]:
+        exp = Experiment(workspace="pose-refinement", project_name="01-batch-shuffle-batchsize")
 
-            if args.output is None:
-                output_path = f"../models/{exp.get_key()}"
-            else:
-                output_path = args.output
+        if args.output is None:
+            output_path = f"../models/{exp.get_key()}"
+        else:
+            output_path = args.output
 
-            params = {
-                "num_epochs": 15,
-                "preprocess_2d": "DepthposeNormalize2D",
-                "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-                "shuffle": True,
-                # training
-                "optimiser": "sgd", # "adam",
-                "adam_amsgrad": True,
-                "learning_rate": lr, # 1e-3
-                "sgd_momentum": 0,
-                "batch_size": 1024,
-                "train_time_flip": True,
-                "test_time_flip": True,
-                "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
-                # dataset
-                "train_data": "mpii_train",
-                "pose2d_type": "hrnet",
-                "pose3d_scaling": "normal",
-                "megadepth_type": "megadepth_at_hrnet",
-                "cap_25fps": True,
-                "stride": 2,
-                "simple_aug": True,  # augments data by duplicating each frame
-                "model": {
-                    "weights": "9854c3528e404d6c8fe576ea76e1bb30",
-                    "loss": "l1",
-                    "channels": 512,
-                    "dropout": 0.25,
-                    "filter_widths": [3, 3, 3],
-                    "layernorm": False,
-                },
-            }
-            run_experiment(output_path, params, exp)
-            eval.main(output_path, False, exp)
-            # eval.main(output_path, True, exp)
+        params = {
+            "num_epochs": 15,
+            "preprocess_2d": "DepthposeNormalize2D",
+            "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+            "shuffle": True,
+            "ordered_batch": False,
+            # training
+            "optimiser": "adam",
+            "adam_amsgrad": True,
+            "learning_rate": 1e-3
+            "sgd_momentum": 0,
+            "batch_size": 1024,
+            "train_time_flip": True,
+            "test_time_flip": True,
+            "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
+            # dataset
+            "train_data": "mpii_train",
+            "pose2d_type": "hrnet",
+            "pose3d_scaling": "normal",
+            "megadepth_type": "megadepth_at_hrnet",
+            "cap_25fps": True,
+            "stride": 2,
+            "simple_aug": True,  # augments data by duplicating each frame
+            "model": {
+                "weights": "9854c3528e404d6c8fe576ea76e1bb30",
+                "loss": "l1",
+                "channels": 512,
+                "dropout": 0.25,
+                "filter_widths": [3, 3, 3],
+                "layernorm": False,
+            },
+        }
+        run_experiment(output_path, params, exp)
+        eval.main(output_path, False, exp)
+        # eval.main(output_path, True, exp)

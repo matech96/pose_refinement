@@ -62,18 +62,20 @@ class ChunkedGenerator:
     Generator to be used with temporal model, during training.
     """
 
-    def __init__(self, dataset, batch_size, pad, augment, shuffle=True):
+    def __init__(self, dataset, batch_size, pad, augment, shuffle=True, ordered_batch=False):
         """
         pad: 2D input padding to compensate for valid convolutions, per side (depends on the receptive field)
                it is usually (receptive_field-1)/2
         augment: turn on random horizontal flipping for training
         shuffle: randomly shuffle the dataset before each epoch
+        ordered_batch: the frames inside the batch are continueous
         """
         assert isinstance(dataset, (Mpi3dTrainDataset, PersonStackedMucoTempDataset, ConcatPoseDataset)), "Only works with Mpi datasets"
         self.dataset = dataset
         self.batch_size = batch_size
         self.pad = pad
         self.shuffle = shuffle
+        self.ordered_batch = ordered_batch
         self.augment = augment
 
         N = len(dataset.index)
@@ -97,19 +99,20 @@ class ChunkedGenerator:
         N = len(self.dataset)
         num_batch = N//self.batch_size
 
-        idxs = np.arange(len(self.frame_start))
-        sub_batch_size = self.batch_size // SUB_BATCH
-        indices = []
-        for start_idx in np.unique(self.frame_start):
-            frame_idx = idxs[self.frame_start == start_idx]
-            if len(frame_idx) > sub_batch_size:
-                split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
-                batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
-                indices += list(frame_idx[i : j] for i, j in batch_start_end_idx if ((j is not None) and (j - i > 1)) or ((j is None) and (len(frame_idx) - i > 1)))
-            else:
-                indices.append(frame_idx)
-
-        # indices = np.arange(N)
+        if not self.ordered_batch:
+            indices = np.arange(N)
+        else:
+            idxs = np.arange(len(self.frame_start))
+            sub_batch_size = self.batch_size // SUB_BATCH
+            indices = []
+            for start_idx in np.unique(self.frame_start):
+                frame_idx = idxs[self.frame_start == start_idx]
+                if len(frame_idx) > sub_batch_size:
+                    split_idx = np.arange(len(frame_idx))[sub_batch_size::sub_batch_size]
+                    batch_start_end_idx = zip(chain([0], split_idx), chain(split_idx, [None]))
+                    indices += list(frame_idx[i : j] for i, j in batch_start_end_idx if ((j is not None) and (j - i > 1)) or ((j is None) and (len(frame_idx) - i > 1)))
+                else:
+                    indices.append(frame_idx)
 
         if self.shuffle:
             np.random.shuffle(indices)
@@ -121,9 +124,11 @@ class ChunkedGenerator:
                 return num_batch*SUB_BATCH
 
             def __getitem__(iself, ind):
-                sub_batch_size = self.batch_size//SUB_BATCH
-                # batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
-                batch_inds = indices[ind]  # (nBatch,)
+                if not self.ordered_batch:
+                    batch_inds = indices[ind]  # (nBatch,)
+                else:
+                    batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
+                
                 batch_frame_start = self.frame_start[batch_inds][:, np.newaxis]
                 batch_frame_end = self.frame_end[batch_inds][:, np.newaxis]
                 assert len(np.unique(batch_frame_start)) == 1
