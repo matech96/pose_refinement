@@ -72,9 +72,29 @@ def run_experiment(output_path, _config, exp: Experiment):
 
     # Load the preprocessing steps
     params_path = os.path.join(LOG_PATH, _config["model"]['weights'], "preprocess_params.pkl")
-    # transform = SaveableCompose.from_file(params_path, test_data, globals())
-    train_data.transform = SaveableCompose.from_file(params_path, train_data, globals())
-    test_data.transform = SaveableCompose.from_file(params_path, test_data, globals())
+    transform = SaveableCompose.from_file(params_path, test_data, globals())
+    
+    train_data.transform = None
+    transforms_train = [
+        decode_trfrm(_config["preprocess_2d"], globals())(train_data, cache=False),
+        decode_trfrm(_config["preprocess_3d"], globals())(train_data, cache=False),
+    ]
+
+    normalizer2d = transforms_train[0].normalizer
+    normalizer3d = transforms_train[1].normalizer
+
+    transforms_test = [
+        decode_trfrm(_config["preprocess_2d"], globals())(test_data, normalizer2d),
+        decode_trfrm(_config["preprocess_3d"], globals())(test_data, normalizer3d),
+    ]
+
+    transforms_train.append(RemoveIndex())
+    transforms_test.append(RemoveIndex())
+
+    train_data.transform = SaveableCompose(transforms_train)
+    test_data.transform = SaveableCompose(transforms_test)
+    # train_data.transform = SaveableCompose.from_file(params_path, train_data, globals())
+    # test_data.transform = SaveableCompose.from_file(params_path, test_data, globals())
 
     # save normalisation params
     save(output_path + "/preprocess_params.pkl", train_data.transform.state_dict())
@@ -109,8 +129,8 @@ def run_experiment(output_path, _config, exp: Experiment):
 
     save(output_path + "/model_summary.txt", str(model))
 
-    normalizer2d = train_data.transform.transforms[0].normalizer
-    normalizer3d = train_data.transform.transforms[1].normalizer
+    # normalizer2d = train_data.transform.transforms[0].normalizer
+    # normalizer3d = train_data.transform.transforms[1].normalizer
 
     pad = (model.receptive_field() - 1) // 2
     train_loader = ChunkedGenerator(
@@ -142,14 +162,14 @@ def run_experiment(output_path, _config, exp: Experiment):
     torch.save(model.state_dict(), model_path)
     exp.log_model("model", model_path)
 
-    save(
-        output_path + "/test_results.pkl",
-        {
-            "index": test_data.index,
-            "pred": preds_from_logger(test_data, tester),
-            "pose3d": test_data.poses3d,
-        },
-    )
+    # save(
+    #     output_path + "/test_results.pkl",
+    #     {
+    #         "index": test_data.index,
+    #         "pred": preds_from_logger(test_data, tester),
+    #         "pose3d": test_data.poses3d,
+    #     },
+    # )
 
 
 if __name__ == "__main__":
@@ -157,44 +177,46 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    exp = Experiment(workspace="pose-refinement", project_name="02-batch-shuffle-pretrained")
+    for _ in range(2):
+        for lr in [1e-3, 1e-4, 1e-5]:
+            exp = Experiment(workspace="pose-refinement", project_name="01-batch-shuffle-batchsize")
 
-    if args.output is None:
-        output_path = f"../models/{exp.get_key()}"
-    else:
-        output_path = args.output
+            if args.output is None:
+                output_path = f"../models/{exp.get_key()}"
+            else:
+                output_path = args.output
 
-    params = {
-        "num_epochs": 15,
-        "preprocess_2d": "DepthposeNormalize2D",
-        "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": True,
-        # training
-        "optimiser": "adam",
-        "adam_amsgrad": True,
-        "learning_rate": 1e-3,
-        "sgd_momentum": 0,
-        "batch_size": 1024,
-        "train_time_flip": True,
-        "test_time_flip": True,
-        "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
-        # dataset
-        "train_data": "mpii_train",
-        "pose2d_type": "hrnet",
-        "pose3d_scaling": "normal",
-        "megadepth_type": "megadepth_at_hrnet",
-        "cap_25fps": True,
-        "stride": 2,
-        "simple_aug": True,  # augments data by duplicating each frame
-        "model": {
-            "weights": "9854c3528e404d6c8fe576ea76e1bb30",
-            "loss": "l1",
-            "channels": 512,
-            "dropout": 0.25,
-            "filter_widths": [3, 3, 3],
-            "layernorm": False,
-        },
-    }
-    run_experiment(output_path, params, exp)
-    eval.main(output_path, False, exp)
-    eval.main(output_path, True, exp)
+            params = {
+                "num_epochs": 15,
+                "preprocess_2d": "DepthposeNormalize2D",
+                "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+                "shuffle": True,
+                # training
+                "optimiser": "sgd", # "adam",
+                "adam_amsgrad": True,
+                "learning_rate": lr, # 1e-3
+                "sgd_momentum": 0,
+                "batch_size": 1024,
+                "train_time_flip": True,
+                "test_time_flip": True,
+                "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
+                # dataset
+                "train_data": "mpii_train",
+                "pose2d_type": "hrnet",
+                "pose3d_scaling": "normal",
+                "megadepth_type": "megadepth_at_hrnet",
+                "cap_25fps": True,
+                "stride": 2,
+                "simple_aug": True,  # augments data by duplicating each frame
+                "model": {
+                    "weights": "9854c3528e404d6c8fe576ea76e1bb30",
+                    "loss": "l1",
+                    "channels": 512,
+                    "dropout": 0.25,
+                    "filter_widths": [3, 3, 3],
+                    "layernorm": False,
+                },
+            }
+            run_experiment(output_path, params, exp)
+            eval.main(output_path, False, exp)
+            # eval.main(output_path, True, exp)
