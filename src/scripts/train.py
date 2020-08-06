@@ -276,7 +276,7 @@ if __name__ == "__main__":
             "channels": 512,
             "dropout": 0.25,
             "filter_widths": [3, 3, 3],
-            "layernorm": False,
+            "layernorm": True, #False,
         },
     }
     run_experiment(output_path, params, exp)

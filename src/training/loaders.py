@@ -125,14 +125,16 @@ class ChunkedGenerator:
 
             def __getitem__(iself, ind):
                 if not self.ordered_batch:
-                    batch_inds = indices[ind]  # (nBatch,)
-                else:
+                    sub_batch_size = self.batch_size // SUB_BATCH
                     batch_inds = indices[ind*sub_batch_size: (ind+1)*sub_batch_size]   # (nBatch,)
+                else:
+                    batch_inds = indices[ind]  # (nBatch,)
                 
                 batch_frame_start = self.frame_start[batch_inds][:, np.newaxis]
                 batch_frame_end = self.frame_end[batch_inds][:, np.newaxis]
-                assert len(np.unique(batch_frame_start)) == 1
-                assert len(np.unique(batch_frame_end)) == 1
+                if self.ordered_batch:
+                    assert len(np.unique(batch_frame_start)) == 1
+                    assert len(np.unique(batch_frame_end)) == 1
 
                 if self.augment:
                     flip = np.random.random(len(batch_inds)) < 0.5

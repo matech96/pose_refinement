@@ -180,8 +180,8 @@ if __name__ == "__main__":
 
     # for _ in range(2):
     #     for lr in [1e-3, 1e-4, 1e-5]:
-    for ordered_batch in [True, False]:
-        exp = Experiment(workspace="pose-refinement", project_name="01-batch-shuffle-batchsize")
+    for ordered_batch in [True, True]:
+        exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
 
         if args.output is None:
             output_path = f"../models/{exp.get_key()}"
@@ -189,15 +189,15 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 15,
+            "num_epochs": 1,#5,
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
-            "ordered_batch": False,
+            "ordered_batch": ordered_batch,
             # training
             "optimiser": "adam",
             "adam_amsgrad": True,
-            "learning_rate": 1e-3
+            "learning_rate": 1e-3,
             "sgd_momentum": 0,
             "batch_size": 1024,
             "train_time_flip": True,
