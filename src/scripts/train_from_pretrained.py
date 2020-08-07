@@ -180,7 +180,9 @@ if __name__ == "__main__":
 
     # for _ in range(2):
     #     for lr in [1e-3, 1e-4, 1e-5]:
-    for ordered_batch in [True, True]:
+    torch.cuda.set_device(0)
+    ordered_batch = False
+    for _ in range(2):
         exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
 
         if args.output is None:
@@ -217,7 +219,7 @@ if __name__ == "__main__":
                 "channels": 512,
                 "dropout": 0.25,
                 "filter_widths": [3, 3, 3],
-                "layernorm": False,
+                "layernorm": True,  # False,
             },
         }
         run_experiment(output_path, params, exp)
