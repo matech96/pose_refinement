@@ -64,6 +64,12 @@ class TemporalModelBase(nn.Module):
             return NoNorm()
         elif self.layernorm == "batchnorm":
             return nn.BatchNorm1d(self.channels, momentum=0.1)
+        elif self.layernorm == "instancenorm":
+            return nn.GroupNorm(self.channels, self.channels))
+        elif self.layernorm == "layernorm":
+            return nn.GroupNorm(1, self.channels)
+        elif self.layernorm == "localresponse":
+            return nn.LocalResponseNorm(2)
 
     def total_causal_shift(self):
         """
