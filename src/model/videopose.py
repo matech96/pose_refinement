@@ -36,10 +36,10 @@ class TemporalModelBase(nn.Module):
         self.shrink = nn.Conv1d(channels, num_joints_out * 3, 1)
 
     def set_bn_momentum(self, momentum):
-        # if not self.layernorm:
-        self.expand_bn.momentum = momentum
-        for bn in self.layers_bn:
-            bn.momentum = momentum
+        if not self.layernorm:
+            self.expand_bn.momentum = momentum
+            for bn in self.layers_bn:
+                bn.momentum = momentum
 
     def receptive_field(self):
         """
@@ -53,8 +53,8 @@ class TemporalModelBase(nn.Module):
     def create_norm_layer(self, frame_num):
         """ frame_num is the spatial dimension """
         if self.layernorm:
-            # return nn.LayerNorm([self.channels, frame_num], elementwise_affine=False)
-            return nn.InstanceNorm1d(self.channels, momentum=0.1, affine=True)
+            return nn.LayerNorm([self.channels, frame_num], elementwise_affine=False)
+            # return nn.InstanceNorm1d(self.channels, momentum=0.1, affine=True)
         else:
             return nn.BatchNorm1d(self.channels, momentum=0.1)
 
