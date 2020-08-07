@@ -99,6 +99,7 @@ def load_model(model_folder):
         config["model"]["filter_widths"],
         dropout=config["model"]["dropout"],
         channels=config["model"]["channels"],
+        layernorm=config["model"]["layernorm"],
     )
 
     m.cuda()

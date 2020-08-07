@@ -243,7 +243,6 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
     
-    torch.cuda.set_device(1)
     layernorm = "batchnorm"
     for _ in range(2):
         for ordered_batch in [False, True]:
@@ -255,7 +254,7 @@ if __name__ == "__main__":
                 output_path = args.output
 
             params = {
-                "num_epochs": 15,
+                "num_epochs": 1,#5,
                 "preprocess_2d": "DepthposeNormalize2D",
                 "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
                 "shuffle": True,
