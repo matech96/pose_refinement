@@ -65,7 +65,7 @@ class TemporalModelBase(nn.Module):
         elif self.layernorm == "batchnorm":
             return nn.BatchNorm1d(self.channels, momentum=0.1)
         elif self.layernorm == "instancenorm":
-            return nn.GroupNorm(self.channels, self.channels))
+            return nn.GroupNorm(self.channels, self.channels)
         elif self.layernorm == "layernorm":
             return nn.GroupNorm(1, self.channels)
         elif self.layernorm == "localresponse":
