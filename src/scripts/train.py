@@ -242,11 +242,11 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
     
-    torch.cuda.set_device(1)
-    layernorm = True
+    torch.cuda.set_device(0)
+    layernorm = "none"
     for _ in range(2):
         for ordered_batch in [False, True]:
-            exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
+            exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
 
             if args.output is None:
                 output_path = f"../models/{exp.get_key()}"
