@@ -242,8 +242,8 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
     
-    torch.cuda.set_device(0)
-    layernorm = False
+    torch.cuda.set_device(1)
+    layernorm = True
     for _ in range(2):
         for ordered_batch in [False, True]:
             exp = Experiment(workspace="pose-refinement", project_name="00-baseline")
