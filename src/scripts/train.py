@@ -243,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
     
-    torch.cuda.set_device(0)
+    torch.cuda.set_device(1)
     layernorm = "batchnorm"
     for _ in range(2):
         for ordered_batch in [False, True]:
