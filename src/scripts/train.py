@@ -204,6 +204,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         pad,
         _config["train_time_flip"],
         shuffle=_config["shuffle"],
+        ordered_batch=_config["ordered_batch"],
     )
     tester = ModelCopyTemporalEvaluator(
         test_model,

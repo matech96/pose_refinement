@@ -61,7 +61,7 @@ class TemporalModelBase(nn.Module):
     def create_norm_layer(self, frame_num):
         """ frame_num is the spatial dimension """
         if self.layernorm == "none":
-            return lambda x: x
+            return NoNorm()
         elif self.layernorm == "batchnorm":
             return nn.BatchNorm1d(self.channels, momentum=0.1)
 
@@ -287,4 +287,9 @@ class TemporalModelOptimized1f(TemporalModelBase):
             )
 
         x = self.shrink(x)
+        return x
+
+
+class NoNorm(nn.Module):
+    def forward(self, x):
         return x
