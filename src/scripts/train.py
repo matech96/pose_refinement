@@ -244,7 +244,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     torch.cuda.set_device(0)
-    layernorm = "none"
+    layernorm = "batchnorm"
     for _ in range(2):
         for ordered_batch in [False, True]:
             exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
