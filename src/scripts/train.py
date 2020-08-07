@@ -243,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
     
-    layernorm = "none"
+    layernorm = "batchnorm"
     for _ in range(2):
         for ordered_batch in [False, True]:
             exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
