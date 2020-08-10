@@ -33,6 +33,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     ensuredir(output_path)
 
     config, m = eval.load_model(_config['weights'])
+    _config["model"] = config["model"]
 
 
     if _config["train_data"] == "mpii_train":
