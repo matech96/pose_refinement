@@ -24,17 +24,17 @@ import copy
 from collections import Iterable
 
 from scripts import eval, train
+
 LOG_PATH = "../models"
 
 
 def run_experiment(output_path, _config, exp: Experiment):
+    config, m = eval.load_model(_config["weights"])
+    _config["model"] = config["model"]
+
     exp.log_parameters(train.flatten_params(_config))
     save(os.path.join(output_path, "config.json"), _config)
     ensuredir(output_path)
-
-    config, m = eval.load_model(_config['weights'])
-    _config["model"] = config["model"]
-
 
     if _config["train_data"] == "mpii_train":
         print("Training data is mpii-train")
@@ -72,9 +72,9 @@ def run_experiment(output_path, _config, exp: Experiment):
         train_data.augment(False)
 
     # Load the preprocessing steps
-    params_path = os.path.join(LOG_PATH, _config['weights'], "preprocess_params.pkl")
+    params_path = os.path.join(LOG_PATH, _config["weights"], "preprocess_params.pkl")
     transform = SaveableCompose.from_file(params_path, test_data, globals())
-    
+
     train_data.transform = None
     transforms_train = [
         decode_trfrm(_config["preprocess_2d"], globals())(train_data, cache=False),
@@ -155,7 +155,13 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: train.calc_loss(m, b, config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
+        lambda m, b: train.calc_loss(
+            m,
+            b,
+            config,
+            torch.tensor(normalizer2d.mean[2::3]).cuda(),
+            torch.tensor(normalizer2d.std[2::3]).cuda(),
+        ),
         _config,
         callbacks=[tester],
     )
@@ -181,7 +187,9 @@ if __name__ == "__main__":
 
     torch.cuda.set_device(0)
     ordered_batch = True
-    exp = Experiment(workspace="pose-refinement", project_name="02-batch-shuffle-pretrained")
+    exp = Experiment(
+        workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
+    )
 
     if args.output is None:
         output_path = f"../models/{exp.get_key()}"
@@ -189,7 +197,7 @@ if __name__ == "__main__":
         output_path = args.output
 
     params = {
-        "num_epochs": 1,#5,
+        "num_epochs": 1,  # 5,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
         "shuffle": True,
