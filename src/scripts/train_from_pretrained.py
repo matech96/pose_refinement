@@ -197,7 +197,7 @@ if __name__ == "__main__":
         output_path = args.output
 
     params = {
-        "num_epochs": 1,  # 5,
+        "num_epochs": 15,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
         "shuffle": True,
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         "cap_25fps": True,
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
-        "weights": "87901884db0b486c95cd9ea9902d3e19",
+        "weights": "5521650cc0994d448a21c96b02afa389",
     }
     run_experiment(output_path, params, exp)
     eval.main(output_path, False, exp)
