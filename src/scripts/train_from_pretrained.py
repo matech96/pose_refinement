@@ -32,7 +32,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     save(os.path.join(output_path, "config.json"), _config)
     ensuredir(output_path)
 
-    config, m = eval.load_model(_config["model"]['weights'])
+    config, m = eval.load_model(_config['weights'])
 
 
     if _config["train_data"] == "mpii_train":
@@ -71,7 +71,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         train_data.augment(False)
 
     # Load the preprocessing steps
-    params_path = os.path.join(LOG_PATH, _config["model"]['weights'], "preprocess_params.pkl")
+    params_path = os.path.join(LOG_PATH, _config['weights'], "preprocess_params.pkl")
     transform = SaveableCompose.from_file(params_path, test_data, globals())
     
     train_data.transform = None
@@ -109,19 +109,19 @@ def run_experiment(output_path, _config, exp: Experiment):
     model = TemporalModelOptimized1f(
         train_data[[0]]["pose2d"].shape[-1],
         MuPoTSJoints.NUM_JOINTS,
-        _config["model"]["filter_widths"],
-        dropout=_config["model"]["dropout"],
-        channels=_config["model"]["channels"],
-        layernorm=_config["model"]["layernorm"],
+        config["model"]["filter_widths"],
+        dropout=config["model"]["dropout"],
+        channels=config["model"]["channels"],
+        layernorm=config["model"]["layernorm"],
     )
     model.load_state_dict(m.state_dict())
     test_model = TemporalModel(
         train_data[[0]]["pose2d"].shape[-1],
         MuPoTSJoints.NUM_JOINTS,
-        _config["model"]["filter_widths"],
-        dropout=_config["model"]["dropout"],
-        channels=_config["model"]["channels"],
-        layernorm=_config["model"]["layernorm"],
+        config["model"]["filter_widths"],
+        dropout=config["model"]["dropout"],
+        channels=config["model"]["channels"],
+        layernorm=config["model"]["layernorm"],
     )
 
     model.cuda()
@@ -144,7 +144,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     tester = ModelCopyTemporalEvaluator(
         test_model,
         test_data,
-        _config["model"]["loss"],
+        config["model"]["loss"],
         _config["test_time_flip"],
         post_process3d=get_postprocessor(_config, test_data, normalizer3d),
         prefix="test",
@@ -154,7 +154,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: train.calc_loss(m, b, _config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
+        lambda m, b: train.calc_loss(m, b, config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
         _config,
         callbacks=[tester],
     )
@@ -210,14 +210,7 @@ if __name__ == "__main__":
         "cap_25fps": True,
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
-        "model": {
-            "weights": "5521650cc0994d448a21c96b02afa389",
-            "loss": "l1",
-            "channels": 512,
-            "dropout": 0.25,
-            "filter_widths": [3, 3, 3],
-            "layernorm": True,  # False,
-        },
+        "weights": "87901884db0b486c95cd9ea9902d3e19",
     }
     run_experiment(output_path, params, exp)
     eval.main(output_path, False, exp)
