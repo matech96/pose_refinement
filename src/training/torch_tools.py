@@ -235,6 +235,9 @@ def torch_train(exp: Experiment, train_loader, model, update_fn, _config, callba
             batch_start = time.time()
 
             loss, vals = update_fn(model, data)
+            global_step = epoch*len(train_loader) + i
+            exp.log_metric('loss', loss, step=global_step)
+            exp.log_metrics(vals, step=global_step)
 
             loss.backward()
             optimizer.step()
@@ -280,10 +283,12 @@ def torch_train(exp: Experiment, train_loader, model, update_fn, _config, callba
 
         epoch_time = time.time() - epoch_start
         epoch_loss = epoch_loss / len(train_loader)
-        exp.log_metric("epoch_loss", epoch_loss, step=(epoch + 1) * i)
+        exp.log_metric("epoch_loss", epoch_loss, epoch=epoch)
+        exp.log_metrics(vals, epoch=epoch)
         epoch_val = {k: v / len(train_loader) for k, v in epoch_val.items()}
         print()
         print("Epoch %3d: loss: %4.3f   %4.1fs" % (epoch + 1, epoch_loss, epoch_time))
+        
 
         # evaluate
         model.eval()

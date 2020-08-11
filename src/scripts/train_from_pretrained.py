@@ -165,6 +165,7 @@ def run_experiment(output_path, _config, exp: Experiment):
             config,
             torch.tensor(normalizer2d.mean[2::3]).cuda(),
             torch.tensor(normalizer2d.std[2::3]).cuda(),
+            torch.tensor(normalizer3d.std).cuda(),
         ),
         _config,
         callbacks=[tester],

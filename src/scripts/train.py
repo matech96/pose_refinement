@@ -40,7 +40,7 @@ def flatten_params(params):
     return res
 
 
-def calc_loss(model, batch, config, mean_2d, std_2d):
+def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     loss_type = config["model"]["loss"]
     if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
@@ -77,20 +77,24 @@ def calc_loss(model, batch, config, mean_2d, std_2d):
     elif loss_type == "smooth":
         _conf_l2_cap = 1
         _conf_large_step = 20
-        _conf_alpha_1 = 0# 0.1
-        _conf_alpha_2 = 0# 1
+        _conf_alpha_1 = 0.1
+        _conf_alpha_2 = 1
         middle_channel = pose2d.shape[1] // 2 + 1
-        normalized_probs = pose2d[:, middle_channel, 2::3] # [1024, 14]
-        unnormalized_probs = normalized_probs * std_2d + mean_2d # [1024, 14]
+        normalized_probs = pose2d[:, middle_channel, 2::3]  # [1024, 14]
+        unnormalized_probs = normalized_probs * std_2d + mean_2d  # [1024, 14]
+        # kp_score = ndimage.median_filter(kp_score, 9)
         v = torch.mean(unnormalized_probs, dim=1)
+        org_pred_3d = pred_3d * std_3d
+        org_gt_3d = gt_3d * std_3d
+
 
         e_pred = capped_l2_euc_err(
-            pred_3d, gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
+            org_pred_3d, org_gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
         )
-        e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
-        # e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
-        # if len(e_smooth_large) == 0:
-        #     e_smooth_large = torch.tensor([0.0]).cuda()
+        e_smooth_small = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, 1)
+        e_smooth_large = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, _conf_large_step)
+        if len(e_smooth_large) == 0:
+            e_smooth_large = torch.tensor([0.0]).cuda()
 
         loss_3d = (
             torch.mean(v * e_pred)
@@ -99,6 +103,16 @@ def calc_loss(model, batch, config, mean_2d, std_2d):
         )
         # loss_3d = torch.mean(v * e_pred)
         # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
+        vals = {
+            n: torch.mean(v).item()
+            for n, v in [
+                ("e_pred", e_pred),
+                ("e_smooth_small", e_smooth_small),
+                ("e_smooth_large", e_smooth_large),
+            ]
+        }
+
+        return loss_3d, vals
     else:
         raise Exception("Unknown pose loss: " + str(config["model"]["loss"]))
 
@@ -220,7 +234,14 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config, torch.tensor(normalizer2d.mean[2::3]).cuda(), torch.tensor(normalizer2d.std[2::3]).cuda()),
+        lambda m, b: calc_loss(
+            m,
+            b,
+            _config,
+            torch.tensor(normalizer2d.mean[2::3]).cuda(),
+            torch.tensor(normalizer2d.std[2::3]).cuda(),
+            torch.tensor(normalizer3d.std).cuda(),
+        ),
         _config,
         callbacks=[tester],
     )
@@ -243,11 +264,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
-    
+
     layernorm = "instancenorm"
     for _ in range(2):
         for ordered_batch in [False, True]:
-            exp = Experiment(workspace="pose-refinement", project_name="03-batch-shuffle-norm-selection")
+            exp = Experiment(
+                workspace="pose-refinement",
+                project_name="03-batch-shuffle-norm-selection",
+            )
 
             if args.output is None:
                 output_path = f"../models/{exp.get_key()}"
@@ -268,7 +292,11 @@ if __name__ == "__main__":
                 "batch_size": 1024,
                 "train_time_flip": True,
                 "test_time_flip": True,
-                "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
+                "lr_scheduler": {
+                    "type": "multiplicative",
+                    "multiplier": 0.95,
+                    "step_size": 1,
+                },
                 # dataset
                 "train_data": "mpii_train",
                 "pose2d_type": "hrnet",
@@ -282,7 +310,7 @@ if __name__ == "__main__":
                     "channels": 512,
                     "dropout": 0.25,
                     "filter_widths": [3, 3, 3],
-                    "layernorm": layernorm, #False,
+                    "layernorm": layernorm,  # False,
                 },
             }
             run_experiment(output_path, params, exp)

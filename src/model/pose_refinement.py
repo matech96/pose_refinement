@@ -62,7 +62,7 @@ def capped_l2_euc_err(pred, gt, a):
         return np.minimum(err * err, a)
     else:
         diff = pred - gt
-        err = torch.sum(diff * diff, dim=-1)
+        err = torch.sum(diff * diff, dim=-1) # TODO mean
         return torch.where(err < a, err, a)
 
 
