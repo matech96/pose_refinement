@@ -30,8 +30,7 @@ LOG_PATH = "../models"
 
 def run_experiment(output_path, _config, exp: Experiment):
     config, m = eval.load_model(_config["weights"])
-    config["model"]["loss"] = _config["loss"]
-    _config["model"] = config["model"]
+    config["model"]["loss"] = _config["model"]["loss"]
 
     tmp = _config["model"]["loss"]
     _config["model"]["loss"] = "v * mse + e_smooth_small"
