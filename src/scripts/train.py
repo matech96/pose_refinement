@@ -77,8 +77,8 @@ def calc_loss(model, batch, config, mean_2d, std_2d):
     elif loss_type == "smooth":
         _conf_l2_cap = 1
         _conf_large_step = 20
-        _conf_alpha_1 = 0.1
-        _conf_alpha_2 = 1
+        _conf_alpha_1 = 0# 0.1
+        _conf_alpha_2 = 0# 1
         middle_channel = pose2d.shape[1] // 2 + 1
         normalized_probs = pose2d[:, middle_channel, 2::3]
         unnormalized_probs = normalized_probs * std_2d + mean_2d

@@ -199,7 +199,7 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 15, 
+            "num_epochs": 3, 
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
@@ -228,8 +228,5 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    run("l1", 1e-4)
     run("smooth", 1e-4)
     run("smooth", 1e-5)
-    run("smooth", 1e-3)
-    run("l1", 1e-3)
