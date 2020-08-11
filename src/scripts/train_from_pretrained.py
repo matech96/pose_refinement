@@ -30,6 +30,7 @@ LOG_PATH = "../models"
 
 def run_experiment(output_path, _config, exp: Experiment):
     config, m = eval.load_model(_config["weights"])
+    config["model"]["loss"] = _config["loss"]
     _config["model"] = config["model"]
 
     exp.log_parameters(train.flatten_params(_config))
@@ -185,42 +186,50 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    torch.cuda.set_device(0)
-    ordered_batch = True
-    exp = Experiment(
-        workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
-    )
+    def run(loss, lr):
+        torch.cuda.set_device(0)
+        ordered_batch = True
+        exp = Experiment(
+            workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
+        )
 
-    if args.output is None:
-        output_path = f"../models/{exp.get_key()}"
-    else:
-        output_path = args.output
+        if args.output is None:
+            output_path = f"../models/{exp.get_key()}"
+        else:
+            output_path = args.output
 
-    params = {
-        "num_epochs": 5, #1 
-        "preprocess_2d": "DepthposeNormalize2D",
-        "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": True,
-        "ordered_batch": ordered_batch,
-        # training
-        "optimiser": "adam",
-        "adam_amsgrad": True,
-        "learning_rate": 1e-4,
-        "sgd_momentum": 0,
-        "batch_size": 1024,
-        "train_time_flip": True,
-        "test_time_flip": True,
-        "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
-        # dataset
-        "train_data": "mpii_train",
-        "pose2d_type": "hrnet",
-        "pose3d_scaling": "normal",
-        "megadepth_type": "megadepth_at_hrnet",
-        "cap_25fps": True,
-        "stride": 2,
-        "simple_aug": True,  # augments data by duplicating each frame
-        "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567"
-    }
-    run_experiment(output_path, params, exp)
-    eval.main(output_path, False, exp)
-    # eval.main(output_path, True, exp)
+        params = {
+            "num_epochs": 15, 
+            "preprocess_2d": "DepthposeNormalize2D",
+            "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+            "shuffle": True,
+            "ordered_batch": ordered_batch,
+            # training
+            "optimiser": "adam",
+            "adam_amsgrad": True,
+            "learning_rate": lr,
+            "sgd_momentum": 0,
+            "batch_size": 1024,
+            "train_time_flip": True,
+            "test_time_flip": True,
+            "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
+            # dataset
+            "train_data": "mpii_train",
+            "pose2d_type": "hrnet",
+            "pose3d_scaling": "normal",
+            "megadepth_type": "megadepth_at_hrnet",
+            "cap_25fps": True,
+            "stride": 2,
+            "simple_aug": True,  # augments data by duplicating each frame
+            "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567",
+            "loss": loss,
+        }
+        run_experiment(output_path, params, exp)
+        eval.main(output_path, False, exp)
+        # eval.main(output_path, True, exp)
+
+    run("l1", 1e-4)
+    run("smooth", 1e-4)
+    run("smooth", 1e-5)
+    run("smooth", 1e-3)
+    run("l1", 1e-3)
