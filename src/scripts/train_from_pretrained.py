@@ -233,8 +233,8 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    device = 0
-    torch.cuda.set_device(0)
+    device = 1
+    torch.cuda.set_device(device)
     if device == 0:
         lr_range = [1e-5, 1e-3]
     else:
