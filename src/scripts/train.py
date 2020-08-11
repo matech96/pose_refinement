@@ -80,24 +80,24 @@ def calc_loss(model, batch, config, mean_2d, std_2d):
         _conf_alpha_1 = 0# 0.1
         _conf_alpha_2 = 0# 1
         middle_channel = pose2d.shape[1] // 2 + 1
-        normalized_probs = pose2d[:, middle_channel, 2::3]
-        unnormalized_probs = normalized_probs * std_2d + mean_2d
+        normalized_probs = pose2d[:, middle_channel, 2::3] # [1024, 14]
+        unnormalized_probs = normalized_probs * std_2d + mean_2d # [1024, 14]
         v = torch.mean(unnormalized_probs, dim=1)
 
         e_pred = capped_l2_euc_err(
             pred_3d, gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
         )
-        # e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
+        e_smooth_small = step_zero_velocity_loss(pred_3d[:, [0], :], 1)
         # e_smooth_large = step_zero_velocity_loss(pred_3d[:, [0], :], _conf_large_step)
         # if len(e_smooth_large) == 0:
         #     e_smooth_large = torch.tensor([0.0]).cuda()
 
-        # loss_3d = (
-        #     torch.mean(v * e_pred)
-        #     + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
-        #     + _conf_alpha_2 * torch.mean(e_smooth_small)
-        # )
-        loss_3d = torch.mean(e_pred)
+        loss_3d = (
+            torch.mean(v * e_pred)
+            # + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
+            + _conf_alpha_2 * torch.mean(e_smooth_small)
+        )
+        # loss_3d = torch.mean(v * e_pred)
         # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     else:
         raise Exception("Unknown pose loss: " + str(config["model"]["loss"]))
