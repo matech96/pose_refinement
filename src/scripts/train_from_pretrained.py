@@ -191,7 +191,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     def run(loss, lr, loss_a1, loss_a2):
-        torch.cuda.set_device(0)
         ordered_batch = True
         exp = Experiment(
             workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
@@ -234,8 +233,13 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    # run("smooth", 1e-4)
-    for lr in [1e-5, 1e-4, 1e-3, 1e-2]:
-        for loss_a1 in [0.1, 0.01, 0.001]:
-            for loss_a2 in [0.1, 0.01, 0.001]:
+    device = 0
+    torch.cuda.set_device(0)
+    if device == 0:
+        lr_range = [1e-5, 1e-3]
+    else:
+        lr_range = [1e-4, 1e-2]
+    for lr in lr_range:
+        for loss_a1 in [1, 0.1, 0.01, 0.001]:
+            for loss_a2 in [1, 0.1, 0.01, 0.001]:
                 run("smooth", 1e-5, loss_a1, loss_a2)
