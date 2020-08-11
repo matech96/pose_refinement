@@ -233,7 +233,7 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    device = 1
+    device = 0
     torch.cuda.set_device(device)
     if device == 0:
         lr_range = [1e-5, 1e-3]
@@ -242,4 +242,4 @@ if __name__ == "__main__":
     for lr in lr_range:
         for loss_a1 in [1, 0.1, 0.01, 0.001]:
             for loss_a2 in [1, 0.1, 0.01, 0.001]:
-                run("smooth", 1e-5, loss_a1, loss_a2)
+                run("smooth", lr, loss_a1, loss_a2)
