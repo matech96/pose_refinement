@@ -162,7 +162,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         lambda m, b: train.calc_loss(
             m,
             b,
-            config,
+            _config,
             torch.tensor(normalizer2d.mean[2::3]).cuda(),
             torch.tensor(normalizer2d.std[2::3]).cuda(),
             torch.tensor(normalizer3d.std).cuda(),
@@ -202,7 +202,7 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 15, 
+            "num_epochs": 15,
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
@@ -215,7 +215,11 @@ if __name__ == "__main__":
             "batch_size": 1024,
             "train_time_flip": True,
             "test_time_flip": True,
-            "lr_scheduler": {"type": "multiplicative", "multiplier": 0.95, "step_size": 1,},
+            "lr_scheduler": {
+                "type": "multiplicative",
+                "multiplier": 0.95,
+                "step_size": 1,
+            },
             # dataset
             "train_data": "mpii_train",
             "pose2d_type": "hrnet",
@@ -225,9 +229,7 @@ if __name__ == "__main__":
             "stride": 2,
             "simple_aug": True,  # augments data by duplicating each frame
             "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567",
-            "loss": loss,
-            "loss_a1": loss_a1,
-            "loss_a2": loss_a2
+            "model": {"loss": loss, "loss_a1": loss_a1, "loss_a2": loss_a2},
         }
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
