@@ -34,7 +34,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     _config["model"] = config["model"]
 
     tmp = _config["model"]["loss"]
-    _config["model"]["loss"] = "v * e_pred + e_smooth_small"
+    _config["model"]["loss"] = "v * mse + e_smooth_small"
     exp.log_parameters(train.flatten_params(_config))
     _config["model"]["loss"] = tmp
     save(os.path.join(output_path, "config.json"), _config)
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    def run(loss, lr):
+    def run(loss, lr, loss_a1, loss_a2):
         torch.cuda.set_device(0)
         ordered_batch = True
         exp = Experiment(
@@ -203,7 +203,7 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 3, 
+            "num_epochs": 15, 
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
@@ -227,10 +227,15 @@ if __name__ == "__main__":
             "simple_aug": True,  # augments data by duplicating each frame
             "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567",
             "loss": loss,
+            "loss_a1": loss_a1,
+            "loss_a2": loss_a2
         }
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
     # run("smooth", 1e-4)
-    run("smooth", 1e-5)
+    for lr in [1e-5, 1e-4, 1e-3, 1e-2]:
+        for loss_a1 in [0.1, 0.01, 0.001]:
+            for loss_a2 in [0.1, 0.01, 0.001]:
+                run("smooth", 1e-5, loss_a1, loss_a2)

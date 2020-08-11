@@ -75,10 +75,10 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "smooth":
-        _conf_l2_cap = 1
+        # _conf_l2_cap = 1
         _conf_large_step = 20
-        _conf_alpha_1 = 0.1
-        _conf_alpha_2 = 1
+        _conf_alpha_1 = config["loss_a1"]
+        _conf_alpha_2 = config["loss_a2"]
         middle_channel = pose2d.shape[1] // 2 + 1
         normalized_probs = pose2d[:, middle_channel, 2::3]  # [1024, 14]
         unnormalized_probs = normalized_probs * std_2d + mean_2d  # [1024, 14]
@@ -88,9 +88,10 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         org_gt_3d = gt_3d * std_3d
 
 
-        e_pred = capped_l2_euc_err(
-            org_pred_3d, org_gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
-        )
+        # e_pred = capped_l2_euc_err(
+        #     org_pred_3d, org_gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
+        # )
+        e_pred = torch.nn.functional.mse_loss(pred_3d, gt_3d)
         e_smooth_small = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, 1)
         e_smooth_large = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, _conf_large_step)
         if len(e_smooth_large) == 0:
@@ -98,11 +99,9 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
 
         loss_3d = (
             torch.mean(v * e_pred)
-            # + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
+            + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
             + _conf_alpha_2 * torch.mean(e_smooth_small)
         )
-        # loss_3d = torch.mean(v * e_pred)
-        # loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
         vals = {
             n: torch.mean(v).item()
             for n, v in [
