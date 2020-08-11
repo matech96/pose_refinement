@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "/workspace/src",
+            "justMyCode": false
+        },
+        
+        {
             "name": "eval",
             "type": "python",
             "request": "launch",
@@ -15,15 +25,6 @@
                 "normal",
                 "-r"
             ]
-        },
-        {
-            "name": "Python: Current File",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "cwd": "/workspace/src",
-            "justMyCode": false
         }
     ]
 }

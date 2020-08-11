@@ -219,7 +219,7 @@ if __name__ == "__main__":
         "cap_25fps": True,
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
-        "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567",
+        "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567"
     }
     run_experiment(output_path, params, exp)
     eval.main(output_path, False, exp)
