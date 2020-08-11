@@ -33,7 +33,10 @@ def run_experiment(output_path, _config, exp: Experiment):
     config["model"]["loss"] = _config["loss"]
     _config["model"] = config["model"]
 
+    tmp = _config["model"]["loss"]
+    # _config["model"]["loss"] = "e_pred"
     exp.log_parameters(train.flatten_params(_config))
+    _config["model"]["loss"] = tmp
     save(os.path.join(output_path, "config.json"), _config)
     ensuredir(output_path)
 
@@ -228,5 +231,5 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    run("smooth", 1e-4)
-    run("smooth", 1e-5)
+    # run("smooth", 1e-4)
+    run("l1", 1e-4)
