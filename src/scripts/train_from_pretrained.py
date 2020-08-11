@@ -197,7 +197,7 @@ if __name__ == "__main__":
         output_path = args.output
 
     params = {
-        "num_epochs": 15,
+        "num_epochs": 5, #1 
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
         "shuffle": True,
