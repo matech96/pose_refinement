@@ -32,10 +32,10 @@ def run_experiment(output_path, _config, exp: Experiment):
     config, m = eval.load_model(_config["weights"])
     config["model"]["loss"] = _config["model"]["loss"]
 
-    tmp = _config["model"]["loss"]
-    _config["model"]["loss"] = "v * mse + e_smooth_small"
+    # tmp = _config["model"]["loss"]
+    # _config["model"]["loss"] = "v * mse + e_smooth_small"
     exp.log_parameters(train.flatten_params(_config))
-    _config["model"]["loss"] = tmp
+    # _config["model"]["loss"] = tmp
     save(os.path.join(output_path, "config.json"), _config)
     ensuredir(output_path)
 
