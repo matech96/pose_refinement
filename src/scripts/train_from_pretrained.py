@@ -229,7 +229,7 @@ if __name__ == "__main__":
             "cap_25fps": True,
             "stride": 2,
             "simple_aug": True,  # augments data by duplicating each frame
-            "weights": "7fcd9956b6cb476c8bbcbaf2e0c54567",
+            "weights": "29cbfa0fc1774b9cbb06a3573b7fb711",
             "model": {"loss": loss, "loss_a1": loss_a1, "loss_a2": loss_a2},
         }
         run_experiment(output_path, params, exp)
