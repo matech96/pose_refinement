@@ -157,54 +157,16 @@ def main(model_name, pose_refine, exp: Experiment):
     logger.eval(calculate_scale_free=not pose_refine, verbose=not pose_refine)
     exp.log_metrics(logger.losses_to_log)
 
-    pred_3d = unstack_mpi3dhp_poses(test_set, logger)
-    print("\n%13s  R-PCK  R-AUC  A-PCK  A-AUC" % "")
-    print("%13s: " % "all poses", end="")
-    keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
-    values = []
-    for relative in [True, False]:
-        pcks, aucs = mpii_3dhp.eval_poses(
-            relative,
-            "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
-            pred_3d,
-        )
-        pck = np.mean(list(pcks.values()))
-        auc = np.mean(list(aucs.values()))
-        values.append(pck)
-        values.append(auc)
-
-        print(" %4.1f   %4.1f  " % (pck, auc), end="")
-    print()
-    exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
-
-    # if pose_refine:
-    #     refine_config = load("../models/pose_refine_config.json")
-    #     pred = np.concatenate([logger.preds[i] for i in range(1, 21)])
-    #     pred = optimize_poses(pred, test_set, refine_config)
-    #     l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
-    #     l.eval(calculate_scale_free=True, verbose=True)
-    #     exp.log_metrics(l.losses_to_log)
-
-    #     pred_by_seq = {}
-    #     for seq in range(1, 21):
-    #         inds = test_set.index.seq_num == seq
-    #         pred_by_seq[seq] = pred[inds]
-    #     pred_2d, pred_3d = unstack_mupots_poses(test_set, pred_by_seq)
-    # else:
-    #     pred_2d, pred_3d = unstack_mupots_poses(test_set, logger.preds)
-    #     exp.log_metrics(logger.losses_to_log)
-
-    # print("\nR-PCK  R-AUC  A-PCK  A-AUC")
+    # pred_3d = unstack_mpi3dhp_poses(test_set, logger)
+    # print("\n%13s  R-PCK  R-AUC  A-PCK  A-AUC" % "")
+    # print("%13s: " % "all poses", end="")
     # keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
     # values = []
     # for relative in [True, False]:
-    #     pcks, aucs = mupots_3d.eval_poses(
-    #         False,
+    #     pcks, aucs = mpii_3dhp.eval_poses(
     #         relative,
     #         "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
-    #         pred_2d,
     #         pred_3d,
-    #         keep_matching=True,
     #     )
     #     pck = np.mean(list(pcks.values()))
     #     auc = np.mean(list(aucs.values()))
@@ -214,6 +176,44 @@ def main(model_name, pose_refine, exp: Experiment):
     #     print(" %4.1f   %4.1f  " % (pck, auc), end="")
     # print()
     # exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
+
+    if pose_refine:
+        refine_config = load("../models/pose_refine_config.json")
+        pred = np.concatenate([logger.preds[i] for i in range(1, 21)])
+        pred = optimize_poses(pred, test_set, refine_config)
+        l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
+        l.eval(calculate_scale_free=True, verbose=True)
+        exp.log_metrics(l.losses_to_log)
+
+        pred_by_seq = {}
+        for seq in range(1, 21):
+            inds = test_set.index.seq_num == seq
+            pred_by_seq[seq] = pred[inds]
+        pred_2d, pred_3d = unstack_mupots_poses(test_set, pred_by_seq)
+    else:
+        pred_2d, pred_3d = unstack_mupots_poses(test_set, logger.preds)
+        exp.log_metrics(logger.losses_to_log)
+
+    print("\nR-PCK  R-AUC  A-PCK  A-AUC")
+    keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
+    values = []
+    for relative in [True, False]:
+        pcks, aucs = mupots_3d.eval_poses(
+            False,
+            relative,
+            "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
+            pred_2d,
+            pred_3d,
+            keep_matching=True,
+        )
+        pck = np.mean(list(pcks.values()))
+        auc = np.mean(list(aucs.values()))
+        values.append(pck)
+        values.append(auc)
+
+        print(" %4.1f   %4.1f  " % (pck, auc), end="")
+    print()
+    exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
 
 
 if __name__ == "__main__":

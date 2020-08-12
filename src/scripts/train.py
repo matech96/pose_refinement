@@ -297,7 +297,7 @@ if __name__ == "__main__":
                     "step_size": 1,
                 },
                 # dataset
-                "train_data": "mpii+muco",
+                "train_data": "mpii_train",
                 "pose2d_type": "hrnet",
                 "pose3d_scaling": "normal",
                 "megadepth_type": "megadepth_at_hrnet",
