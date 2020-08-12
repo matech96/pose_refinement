@@ -9,7 +9,7 @@ from databases.joint_sets import CocoExJoints, OpenPoseJoints, MuPoTSJoints
 
 
 class PoseDataset(Dataset):
-    """ Subclasses should have the attributes poses2d/3d, pred_cdepths, pose[2|3]d_jointset defined."""
+    """ Subclasses should have the attributes poses2d/3d, pose[2|3]d_jointset defined."""
 
     def filter_dataset(self, inds):
         """
@@ -22,7 +22,6 @@ class PoseDataset(Dataset):
         if hasattr(self, 'width'):
             self.width = self.width[inds]
 
-        self.pred_cdepths = self.pred_cdepths[inds]
         self.poses2d = self.poses2d[inds]
         self.poses3d = self.poses3d[inds]
 
@@ -66,7 +65,7 @@ class AugmentMixin:
 
         # Duplicate all the training data, the first half is the original unchanged,
         # the second half is augmented
-        for field in ['poses2d', 'poses3d', 'pred_cdepths', 'fx', 'fy', 'cx', 'cy', 'width', 'valid_2d_pred']:
+        for field in ['poses2d', 'poses3d', 'fx', 'fy', 'cx', 'cy', 'width', 'valid_2d_pred']:
             if hasattr(self, field):
                 data = self.__getattribute__(field)
                 self.__setattr__(field, np.concatenate([data, data.copy()]))
@@ -161,7 +160,7 @@ class ConcatPoseDataset(FlippableDataset, TemporalAugmentMixin):
         self.data1 = data1
         self.data2 = data2
 
-        fields = ['poses2d', 'poses3d', 'pred_cdepths', 'fx', 'fy', 'cx', 'cy', 'valid_2d_pred']
+        fields = ['poses2d', 'poses3d', 'fx', 'fy', 'cx', 'cy', 'valid_2d_pred']
         for field in fields:
             field1 = data1.__getattribute__(field)
             field2 = data2.__getattribute__(field)
@@ -183,7 +182,7 @@ class ConcatPoseDataset(FlippableDataset, TemporalAugmentMixin):
         else:
             width = 2048
 
-        sample = {'pose2d': self.poses2d[ind], 'pose3d': self.poses3d[ind], 'pred_cdepth': self.pred_cdepths[ind],
+        sample = {'pose2d': self.poses2d[ind], 'pose3d': self.poses3d[ind],
                   'index': ind, 'valid_pose': self.valid_2d_pred[ind], 'cx': self.cx[ind], 'width': width}
 
         return sample
