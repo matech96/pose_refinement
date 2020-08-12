@@ -110,16 +110,16 @@ def load_model(model_folder):
 
 
 def get_dataset(config):
-    # data = PersonStackedMuPoTsDataset(
-    #     config["pose2d_type"],
-    #     config.get("pose3d_scaling", "normal"),
-    #     pose_validity="all",
-    # )
-    data = Mpi3dTestDataset(
+    data = PersonStackedMuPoTsDataset(
         config["pose2d_type"],
         config.get("pose3d_scaling", "normal"),
-        eval_frames_only=True,
+        pose_validity="all",
     )
+    # data = Mpi3dTestDataset(
+    #     config["pose2d_type"],
+    #     config.get("pose3d_scaling", "normal"),
+    #     eval_frames_only=True,
+    # )
     return data
 
 
@@ -137,16 +137,8 @@ def main(model_name, pose_refine, exp: Experiment):
     post_process_func = get_postprocessor(config, test_set, normalizer3d)
 
     prefix = "R" if pose_refine else "NR"
-    prefix = f"mpi_{prefix}"
-    # logger = TemporalMupotsEvaluator(
-    #     m,
-    #     test_set,
-    #     config["model"]["loss"],
-    #     True,
-    #     post_process3d=post_process_func,
-    #     prefix=prefix,
-    # )
-    logger = TemporalTestEvaluator(
+    prefix = f"mupo_{prefix}"
+    logger = TemporalMupotsEvaluator(
         m,
         test_set,
         config["model"]["loss"],
@@ -154,6 +146,14 @@ def main(model_name, pose_refine, exp: Experiment):
         post_process3d=post_process_func,
         prefix=prefix,
     )
+    # logger = TemporalTestEvaluator(
+    #     m,
+    #     test_set,
+    #     config["model"]["loss"],
+    #     True,
+    #     post_process3d=post_process_func,
+    #     prefix=prefix,
+    # )
     logger.eval(calculate_scale_free=not pose_refine, verbose=not pose_refine)
     exp.log_metrics(logger.losses_to_log)
 
