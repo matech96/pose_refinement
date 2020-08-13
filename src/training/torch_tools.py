@@ -230,8 +230,8 @@ def torch_train(exp: Experiment, train_loader, model, update_fn, _config, callba
         iter_start = time.time()
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
-            if i > 9:
-                exit()
+            # if i > 9:
+            #     exit()
             # zero the parameter gradients
             optimizer.zero_grad()
 

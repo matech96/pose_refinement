@@ -193,7 +193,7 @@ if __name__ == "__main__":
 
     def run(loss, lr, loss_a1, loss_a2):
         exp = Experiment(
-            workspace="pose-refinement", project_name="04-plot-joint-motion"
+            workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
         )
 
         if args.output is None:
