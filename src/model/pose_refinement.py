@@ -138,29 +138,29 @@ def optimize_poses(pred3d, data, _config, **kwargs):
     joint_set = MuPoTSJoints()
 
     seqs = np.unique(data.index.seq)
-    smoothed_pred = np.zeros_like(pred3d)
+    smoothed_pred = np.zeros_like(pred3d) # (20899, 17, 3)
 
     losses = []
 
     for seq in seqs:
-        inds = data.index.seq == seq
+        inds = data.index.seq == seq # (20899,)
 
-        poses_init = abs_to_hiprel(pred3d[inds].copy(), joint_set).astype('float32') / 1000
+        poses_init = abs_to_hiprel(pred3d[inds].copy(), joint_set).astype('float32') / 1000 # (201, 17, 3)
 
         # interpolate invisible poses, if required
-        visible_poses = data.good_poses[inds]
-        poses_pred = poses_init.copy()
+        visible_poses = data.good_poses[inds] # (201,)
+        poses_pred = poses_init.copy() # (201, 17, 3)
 
-        kp_score = np.mean(data.poses2d[inds, :, 2], axis=-1)
+        kp_score = np.mean(data.poses2d[inds, :, 2], axis=-1) # (201,)
         if _config['smooth_visibility']:
             kp_score = ndimage.median_filter(kp_score, 9)
         kp_score = torch.from_numpy(kp_score).cuda() # [201]
         poses_init = torch.from_numpy(poses_init).cuda() # [201, 17, 3]
         poses_pred = torch.from_numpy(poses_pred).cuda() # [201, 17, 3]
-        scale = torch.ones((len(kp_score), 1, 1))
+        scale = torch.ones((len(kp_score), 1, 1)) # torch.Size([201, 1, 1])
 
         poses_init.requires_grad = False
-        poses_pred.requires_grad = True
+        poses_pred.requires_grad = True # TODO set to False
         kp_score.requires_grad = False
         scale.requires_grad = False
 

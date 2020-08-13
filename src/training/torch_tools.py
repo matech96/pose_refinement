@@ -8,6 +8,7 @@ from inspect import signature
 import time
 from torch import optim
 from util.pose import mrpe
+import matplotlib.pyplot as plt
 
 
 def exp_decay(params):
@@ -229,10 +230,17 @@ def torch_train(exp: Experiment, train_loader, model, update_fn, _config, callba
         iter_start = time.time()
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
+            if i > 9:
+                exit()
             # zero the parameter gradients
             optimizer.zero_grad()
 
             batch_start = time.time()
+
+            # ff2d = data['temporal_pose2d'][:, 0, :]
+            # plt.plot(list(ff2d[:, -3].numpy()), list(ff2d[:, -2].numpy()))
+            # exp.log_figure(f'{i}')
+            # plt.close()
 
             loss, vals = update_fn(model, data)
             global_step = epoch*len(train_loader) + i

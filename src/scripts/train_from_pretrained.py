@@ -192,9 +192,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     def run(loss, lr, loss_a1, loss_a2):
-        ordered_batch = True
         exp = Experiment(
-            workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
+            workspace="pose-refinement", project_name="04-plot-joint-motion"
         )
 
         if args.output is None:
@@ -203,18 +202,18 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 15,
+            "num_epochs": 1,
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
-            "ordered_batch": ordered_batch,
+            "ordered_batch": True,
             # training
             "optimiser": "adam",
             "adam_amsgrad": True,
             "learning_rate": lr,
             "sgd_momentum": 0,
             "batch_size": 1024,
-            "train_time_flip": True,
+            "train_time_flip": False, # True,
             "test_time_flip": True,
             "lr_scheduler": {
                 "type": "multiplicative",
@@ -228,7 +227,7 @@ if __name__ == "__main__":
             "megadepth_type": "megadepth_at_hrnet",
             "cap_25fps": True,
             "stride": 2,
-            "simple_aug": True,  # augments data by duplicating each frame
+            "simple_aug": False, # True,  # augments data by duplicating each frame
             "weights": "29cbfa0fc1774b9cbb06a3573b7fb711",
             "model": {"loss": loss, "loss_a1": loss_a1, "loss_a2": loss_a2},
         }
