@@ -70,10 +70,14 @@ def abs_to_hiprel(poses, joint_set):
     """ Converts an absolute pose into [hi]+relative_pose. """
     assert_shape(poses, (None, joint_set.NUM_JOINTS, 3))
 
-    root = poses[:, [joint_set.index_of('hip')]].copy()
-    rel = remove_root(poses, joint_set.index_of('hip'))
-
-    return np.concatenate([root, rel], axis=-2)
+    if isinstance(poses, torch.Tensor):
+        root = poses[:, [joint_set.index_of('hip')]]
+        rel = remove_root(poses, joint_set.index_of('hip'))
+        return torch.cat([root, rel], dim=-2)
+    else:
+        root = poses[:, [joint_set.index_of('hip')]].copy()
+        rel = remove_root(poses, joint_set.index_of('hip'))
+        return np.concatenate([root, rel], axis=-2)
 
 
 def add_back_hip(poses, joint_set):
@@ -138,7 +142,10 @@ def optimize_poses(pred3d, data, _config, **kwargs):
     joint_set = MuPoTSJoints()
 
     seqs = np.unique(data.index.seq)
-    smoothed_pred = np.zeros_like(pred3d) # (20899, 17, 3)
+    if isinstance(pred3d, torch.Tensor):
+        smoothed_pred = np.zeros(pred3d.shape)
+    else:
+        smoothed_pred = np.zeros_like(pred3d) # (20899, 17, 3)
 
     losses = []
 
@@ -193,6 +200,16 @@ def optimize_poses(pred3d, data, _config, **kwargs):
                          + _config['smoothness_weight_hip_large'] * velocity_loss_hip_large \
                          + _config['smoothness_weight_rel'] * velocity_loss_rel \
                          + _config['smoothness_weight_rel_large'] * velocity_loss_rel_large
+
+            # np.savez("pose_ref.npz",
+            #     total_loss=total_loss.detach().cpu(),
+            #     pose_loss=pose_loss.detach().cpu(),
+            #     velocity_loss_hip=velocity_loss_hip.detach().cpu(),
+            #     velocity_loss_hip_large=velocity_loss_hip_large.detach().cpu(),
+            #     velocity_loss_rel=velocity_loss_rel.detach().cpu(),
+            #     velocity_loss_rel_large=velocity_loss_rel_large.detach().cpu(),
+            # )
+            # exit()
 
             optimizer.zero_grad()
             total_loss.backward()

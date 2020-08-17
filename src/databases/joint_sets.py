@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from util.misc import assert_shape
 
@@ -13,11 +14,12 @@ class JointSet:
         assert len(joint_inds) > 0, "No joint called " + joint_name
         return joint_inds[0]
 
-    def flip(self, data):
+    def flip(self, data):  # TODO Torchify
         """ Flips a dataset """
         assert_shape(data, ('*', self.NUM_JOINTS, None))
 
-        data = data.copy()
+        if type(data) != torch.Tensor:
+            data = data.copy()
         data[...,self.JOINTS_LEFT+self.JOINTS_RIGHT,:] = data[...,self.JOINTS_RIGHT+self.JOINTS_LEFT,:]
         return data
 

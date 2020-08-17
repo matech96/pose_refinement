@@ -78,13 +78,14 @@ class BaseMPJPECalculator(BaseCallback):
         :param calculate_scale_free: if True, also calculates N-MRPE and N_RMPJPE
         :return:
         """
-        losses, preds = self.pred_and_calc_loss(model)
+        losses, preds = self.pred_and_calc_loss(model)        
         losses = np.concatenate([losses[seq] for seq in self.sequences])
         self.val_loss = np.nanmean(losses)
         self.losses_to_log = {self.prefix + '_loss': self.val_loss}
 
         self.losses = losses
         self.preds = preds
+        # preds = {k: v.cpu().numpy() for k, v in preds.items()}
 
         # Assuming hip is the last component
         if self.is_absolute:
@@ -196,11 +197,11 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         with torch.no_grad():
             for i, (pose2d, valid) in enumerate(self.generator):
                 seq = self.seqs[i]
-                pred3d = self.model(torch.from_numpy(pose2d).cuda()).detach().cpu().numpy()
-                self.raw_preds[seq] = pred3d.copy()
+                pred3d = self.model(torch.from_numpy(pose2d).cuda()).detach().cpu().numpy() # TODO remove removal
+                self.raw_preds[seq] = pred3d.copy()#.cpu().numpy()
 
                 valid = valid[0]
-                losses[seq] = self.loss(pred3d[0][valid], self.preprocessed3d[seq])
+                losses[seq] = self.loss(pred3d[0][valid], self.preprocessed3d[seq]) # .cpu().numpy()
 
                 pred_real_pose = self.post_process3d(pred3d[0], seq)  # unnormalized output
 
@@ -231,7 +232,10 @@ class TemporalMupotsEvaluator(TemporalTestEvaluator):
         for seq in range(1, 21):
             keys = sorted([k for k in per_person_keys if k.startswith('%d/' % seq)])
             assert len(keys) > 0, per_person_keys
-            result[seq] = np.concatenate([data[k] for k in keys])
+            if type(data[keys[0]]) == torch.Tensor:
+                result[seq] = torch.cat([data[k] for k in keys])
+            else:
+                result[seq] = np.concatenate([data[k] for k in keys])
 
         return result
 

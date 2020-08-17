@@ -195,6 +195,7 @@ if __name__ == "__main__":
         exp = Experiment(
             workspace="pose-refinement", project_name="02-batch-shuffle-pretrained"
         )
+        exp.add_tag("no bad frames")
 
         if args.output is None:
             output_path = f"../models/{exp.get_key()}"
@@ -240,11 +241,11 @@ if __name__ == "__main__":
     loss_a2 = 1
     run("smooth", lr, loss_a1, loss_a2)
     # device = 0
-    # if device == 0:
-    #     lr_range = [1e-5, 1e-3]
-    # else:
-    #     lr_range = [1e-4, 1e-2]
-    # for lr in lr_range:
-    #     for loss_a1 in [1, 0.1, 0.01, 0.001]:
-    #         for loss_a2 in [1, 0.1, 0.01, 0.001]:
-    #             run("smooth", lr, loss_a1, loss_a2)
+    if device == 0:
+        lr_range = [1e-5, 1e-3]
+    else:
+        lr_range = [1e-4, 1e-2]
+    for lr in lr_range:
+        for loss_a1 in [1, 0.1, 0.01, 0.001]:
+            for loss_a2 in [1, 0.1, 0.01, 0.001]:
+                run("smooth", lr, loss_a1, loss_a2)

@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 from databases.joint_sets import CocoExJoints
@@ -85,7 +86,7 @@ def remove_root_keepscore(data, root_ind):
     return data
 
 
-def combine_pose_and_trans(data3d, std3d, mean3d, joint_set, root_name, log_root_z=True):
+def combine_pose_and_trans(data3d, std3d, mean3d, joint_set, root_name, log_root_z=True):  # TODO Torchify
     """
     3D result postprocess: unnormalizes data3d and reconstructs the absolute pose from relative + absolute split.
 
@@ -100,17 +101,26 @@ def combine_pose_and_trans(data3d, std3d, mean3d, joint_set, root_name, log_root
         ndarray(nPoses, nJoints, 3)
     """
     assert_shape(data3d, (None, joint_set.NUM_JOINTS * 3))
-
-    data3d = data3d * std3d + mean3d
-    root = data3d[:, -3:]
-    rel_pose = data3d[:, :-3].reshape((len(data3d), joint_set.NUM_JOINTS - 1, 3))
+    if type(data3d) == torch.Tensor:
+        data3d = data3d * torch.from_numpy(std3d).cuda() + torch.from_numpy(mean3d).cuda()
+    else:
+        data3d = data3d * std3d + mean3d
+    root = data3d[:, -3:]  # (201, 3)
+    rel_pose = data3d[:, :-3].reshape((len(data3d), joint_set.NUM_JOINTS - 1, 3))  # (201, 16, 3)
 
     if log_root_z:
-        root[:, 2] = np.exp(root[:, 2])
+        if type(data3d) == torch.Tensor:
+            root[:, 2] = torch.exp(root[:, 2])
+        else:
+            root[:, 2] = np.exp(root[:, 2])
 
     rel_pose += root[:, np.newaxis, :]
 
-    result = np.zeros((len(data3d), joint_set.NUM_JOINTS, 3), dtype='float32')
+    if type(data3d) == torch.Tensor:
+        result = torch.zeros((len(data3d), joint_set.NUM_JOINTS, 3)).cuda()
+    else:
+        result = np.zeros((len(data3d), joint_set.NUM_JOINTS, 3), dtype='float32')
+
     root_ind = joint_set.index_of(root_name)
     result[:, :root_ind, :] = rel_pose[:, :root_ind, :]
     result[:, root_ind, :] = root
