@@ -240,7 +240,7 @@ if __name__ == "__main__":
     loss_a1 = 0.1
     loss_a2 = 1
     run("smooth", lr, loss_a1, loss_a2)
-    # device = 0
+    device = 0
     if device == 0:
         lr_range = [1e-5, 1e-3]
     else:
