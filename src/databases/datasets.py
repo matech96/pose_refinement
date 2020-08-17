@@ -184,7 +184,7 @@ class ConcatPoseDataset(FlippableDataset, TemporalAugmentMixin):
 
         sample = {'pose2d': self.poses2d[ind], 'pose3d': self.poses3d[ind],
                   'index': ind, 'valid_pose': self.valid_2d_pred[ind], 'cx': self.cx[ind], 'width': width}
-
+        # TODO Viz
         return sample
 
 

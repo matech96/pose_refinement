@@ -54,21 +54,22 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
     data = remove_root_keepscore(data, root_ind)  # (nPoses, 13, 3), modifies data, (1098610, 13, 3)
     # print(data.dtype)
 
-    # negligible
-    bad_frames = data[..., 2] < 0.1
+    # TODO why is this here
+    # # negligible
+    # bad_frames = data[..., 2] < 0.1
 
-    # replace joints having low scores with 1700/focus
-    # this is to prevent leaking cx/cy
-    # this is 140ms
-    if isinstance(fx, np.ndarray):
-        fx = np.tile(fx, (1,) + data.shape[1:-1])
-        fy = np.tile(fy, (1,) + data.shape[1:-1])
-        data[bad_frames, 0] = -1700 / fx[bad_frames]
-        data[bad_frames, 1] = -1700 / fy[bad_frames]
-    else:
-        data[bad_frames, 0] = -1700 / fx
-        data[bad_frames, 1] = -1700 / fy
-    # print(data.dtype)
+    # # replace joints having low scores with 1700/focus
+    # # this is to prevent leaking cx/cy
+    # # this is 140ms
+    # if isinstance(fx, np.ndarray):
+    #     fx = np.tile(fx, (1,) + data.shape[1:-1])
+    #     fy = np.tile(fy, (1,) + data.shape[1:-1])
+    #     data[bad_frames, 0] = -1700 / fx[bad_frames]
+    #     data[bad_frames, 1] = -1700 / fy[bad_frames]
+    # else:
+    #     data[bad_frames, 0] = -1700 / fx
+    #     data[bad_frames, 1] = -1700 / fy
+    # # print(data.dtype)
 
     # stack root next to the pose
     data = data.reshape(data.shape[:-2] + (-1,))  # (nPoses, 13*3) (1098610, 39)
