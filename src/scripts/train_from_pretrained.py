@@ -236,10 +236,6 @@ if __name__ == "__main__":
         eval.main(output_path, False, exp)
         # eval.main(output_path, True, exp)
 
-    lr=1e-4
-    loss_a1 = 0.1
-    loss_a2 = 1
-    run("smooth", lr, loss_a1, loss_a2)
     device = 0
     if device == 0:
         lr_range = [1e-5, 1e-3]
