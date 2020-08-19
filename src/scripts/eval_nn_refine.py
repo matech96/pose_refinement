@@ -1,88 +1,39 @@
-#!/usr/bin/python3
-"""
-Evaluates a (not end2end) model on MuPo-TS
-"""
-from comet_ml import Experiment, ExistingExperiment
-import argparse
-import os
+from comet_ml import Experiment
 import sys
 
 sys.path.append("/workspace/src")
 
-import numpy as np
+import os
 import torch
-from util.misc import load
+import numpy as np
+import copy
 
-from databases import mupots_3d, mpii_3dhp
-from databases.datasets import PersonStackedMuPoTsDataset, Mpi3dTestDataset
-from databases.joint_sets import MuPoTSJoints, CocoExJoints
-from model.pose_refinement import optimize_poses, StackedArrayAllMupotsEvaluator
+from util.misc import load
 from model.videopose import TemporalModel
-from training.callbacks import TemporalMupotsEvaluator, TemporalTestEvaluator
+from model.pose_refinement import (
+    abs_to_hiprel,
+    add_back_hip,
+    gmloss,
+    capped_l2,
+    capped_l2_euc_err,
+    step_zero_velocity_loss,
+)
+from databases.joint_sets import MuPoTSJoints
+from databases.datasets import PersonStackedMuPoTsDataset
 from training.preprocess import get_postprocessor, SaveableCompose, MeanNormalize3D
+from training.callbacks import TemporalMupotsEvaluator
+from training.loaders import UnchunkedGenerator
+from training.torch_tools import get_optimizer
+from model.pose_refinement import StackedArrayAllMupotsEvaluator
+from scripts.eval import unstack_mupots_poses
+from databases import mupots_3d
+
 
 LOG_PATH = "../models"
+model_name = "29cbfa0fc1774b9cbb06a3573b7fb711"
+lr = 0.0001
 
-
-def unstack_mpi3dhp_poses(dataset, logger):
-    """
-    Converts output of the logger to dict of ndarrays that are aligned with gt, adding back
-    frames where 2D/depth was invalid.
-    """
-
-    pred_3d = {}
-    for seq in range(1, 7):
-        gt = mpii_3dhp.test_ground_truth(seq)
-        gt_len = len(gt["annot2"])
-
-        pred_3d[seq] = np.full(
-            (gt_len, 17, 3), 1e6
-        )  # Fill preds with large values to be ignored by pck calculation
-        seq_inds = dataset.index.seq == seq
-        valid = dataset.good_poses[seq_inds]
-        frame_inds = dataset.index.frame[seq_inds][valid]
-        assert len(frame_inds) == len(logger.preds[seq])
-
-        pred_3d[seq][frame_inds] = logger.preds[seq]
-        # for i in range(gt_len):
-        #     seq_inds = (dataset.index.seq == seq)
-        #     frame_inds = (dataset.index.frame == i)
-        #     pred_3d[seq].append(logger.preds[seq][frame_inds[seq_inds]])
-
-    return pred_3d
-
-
-def unstack_mupots_poses(dataset, predictions):
-    """ Converts output of the logger to dict of list of ndarrays. """
-    COCO_TO_MUPOTS = []
-    for i in range(MuPoTSJoints.NUM_JOINTS):
-        try:
-            COCO_TO_MUPOTS.append(CocoExJoints().index_of(MuPoTSJoints.NAMES[i]))
-        except:
-            COCO_TO_MUPOTS.append(-1)
-    COCO_TO_MUPOTS = np.array(COCO_TO_MUPOTS)
-    assert np.all(COCO_TO_MUPOTS[1:14] >= 0)
-
-    pred_2d = {}
-    pred_3d = {}
-    for seq in range(1, 21):
-        gt = mupots_3d.load_gt_annotations(seq)
-        gt_len = len(gt["annot2"])
-
-        pred_2d[seq] = []
-        pred_3d[seq] = []
-
-        seq_inds = dataset.index.seq_num == seq
-        for i in range(gt_len):
-            frame_inds = dataset.index.frame == i
-            valid = dataset.good_poses & seq_inds & frame_inds
-
-            pred_2d[seq].append(dataset.poses2d[valid, :, :2][:, COCO_TO_MUPOTS])
-            pred_3d[seq].append(
-                predictions[seq][frame_inds[dataset.good_poses & seq_inds]]
-            )
-
-    return pred_2d, pred_3d
+exp = Experiment(workspace="pose-refinement", project_name="05-nn-refine")
 
 
 def load_model(model_folder):
@@ -110,23 +61,14 @@ def load_model(model_folder):
 
 
 def get_dataset(config):
-    data = PersonStackedMuPoTsDataset(
+    return PersonStackedMuPoTsDataset(
         config["pose2d_type"],
         config.get("pose3d_scaling", "normal"),
         pose_validity="all",
     )
-    # data = Mpi3dTestDataset(
-    #     config["pose2d_type"],
-    #     config.get("pose3d_scaling", "normal"),
-    #     eval_frames_only=True,
-    # )
-    return data
 
 
-def main(model_name, pose_refine, exp: Experiment):
-    config, m = load_model(model_name)
-    test_set = get_dataset(config)
-
+def extract_post(model_name, test_set):
     params_path = os.path.join(LOG_PATH, str(model_name), "preprocess_params.pkl")
     transform = SaveableCompose.from_file(params_path, test_set, globals())
     test_set.transform = transform
@@ -134,102 +76,171 @@ def main(model_name, pose_refine, exp: Experiment):
     assert isinstance(transform.transforms[1].normalizer, MeanNormalize3D)
     normalizer3d = transform.transforms[1].normalizer
 
-    post_process_func = get_postprocessor(config, test_set, normalizer3d)
+    return get_postprocessor(config, test_set, normalizer3d)
 
-    prefix = "R" if pose_refine else "NR"
-    prefix = f"mupo_{prefix}"
-    logger = TemporalMupotsEvaluator(
-        m,
-        test_set,
-        config["model"]["loss"],
-        True,
-        post_process3d=post_process_func,
-        prefix=prefix,
-    )
-    # logger = TemporalTestEvaluator(
-    #     m,
-    #     test_set,
-    #     config["model"]["loss"],
-    #     True,
-    #     post_process3d=post_process_func,
-    #     prefix=prefix,
-    # )
-    logger.eval(calculate_scale_free=not pose_refine, verbose=not pose_refine)
-    exp.log_metrics(logger.losses_to_log)
 
-    # pred_3d = unstack_mpi3dhp_poses(test_set, logger)
-    # print("\n%13s  R-PCK  R-AUC  A-PCK  A-AUC" % "")
-    # print("%13s: " % "all poses", end="")
-    # keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
-    # values = []
-    # for relative in [True, False]:
-    #     pcks, aucs = mpii_3dhp.eval_poses(
-    #         relative,
-    #         "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
-    #         pred_3d,
-    #     )
-    #     pck = np.mean(list(pcks.values()))
-    #     auc = np.mean(list(aucs.values()))
-    #     values.append(pck)
-    #     values.append(auc)
+config, model = load_model(model_name)
+test_set = get_dataset(config)
+post_process_func = extract_post(model_name, test_set)
 
-    #     print(" %4.1f   %4.1f  " % (pck, auc), end="")
-    # print()
-    # exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
+refine_config = load("../models/pose_refine_config.json")
+joint_set = MuPoTSJoints()
 
-    if pose_refine:
-        refine_config = load("../models/pose_refine_config.json")
-        pred = np.concatenate(([logger.preds[i] for i in range(1, 21)]))
-        # pred = torch.cat(([logger.preds[i] for i in range(1, 21)]))
-        pred = optimize_poses(pred, test_set, refine_config)
-        l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
-        l.eval(calculate_scale_free=True, verbose=True)
-        exp.log_metrics(l.losses_to_log)
+pad = (model.receptive_field() - 1) // 2
+generator = UnchunkedGenerator(test_set, pad, True)
+seqs = sorted(np.unique(test_set.index.seq))
 
-        pred_by_seq = {}
-        for seq in range(1, 21):
-            inds = test_set.index.seq_num == seq
-            pred_by_seq[seq] = pred[inds]
-        pred_2d, pred_3d = unstack_mupots_poses(test_set, pred_by_seq)
-    else:
-        pred_2d, pred_3d = unstack_mupots_poses(test_set, logger.preds)
-        exp.log_metrics(logger.losses_to_log)
+refine_config["learning_rate"] = lr
 
-    print("\nR-PCK  R-AUC  A-PCK  A-AUC")
-    keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
-    values = []
-    for relative in [True, False]:
-        pcks, aucs = mupots_3d.eval_poses(
-            False,
-            relative,
-            "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
-            pred_2d,
-            pred_3d,
-            keep_matching=True,
+optimized_preds_list = []
+for i, (pose2d, valid) in enumerate(generator):
+    for j in range(valid.shape[-1]):
+        if (j + 1) > (valid.shape[-1] - refine_config["smoothness_loss_hip_largestep"]):
+            reverse = True
+            f = j - refine_config["smoothness_loss_hip_largestep"]
+            t = j + 1
+        else:
+            reverse = False
+            f = j
+            t = f + refine_config["smoothness_loss_hip_largestep"] + 1
+        model_ = copy.deepcopy(model)
+        optimizer = get_optimizer(model_.parameters(), refine_config)
+        for k in range(refine_config["num_iter"]):
+            optimizer.zero_grad()
+
+            seq = seqs[i]
+            pred3d = model_(
+                torch.from_numpy(pose2d[:, f : t + 2 * pad, :]).cuda()
+            )  # [2, 401, 42] -> [2, 21+2*13, 42], pred3d: [21, 16, 3]
+            valid_ = valid[0][f:t]
+
+            pred_real_pose = post_process_func(pred3d[0], seq)  # unnormalized output
+
+            pred_real_pose_aug = post_process_func(pred3d[1], seq)
+            pred_real_pose_aug[:, :, 0] *= -1
+            pred_real_pose_aug = test_set.pose3d_jointset.flip(pred_real_pose_aug)
+            pred_real_pose = (pred_real_pose + pred_real_pose_aug) / 2
+
+            pred = pred_real_pose[valid_]
+
+            inds = test_set.index.seq == seq
+
+            poses_pred = abs_to_hiprel(pred, joint_set) / 1000  # (201, 17, 3)
+            if k == 0:
+                poses_init = poses_pred.detach().clone()
+                poses_init.requires_grad = False
+                kp_score = np.mean(test_set.poses2d[inds, :, 2], axis=-1)[f:t]  # (201,)
+                #     if refine_config['smooth_visibility']:
+                #         kp_score = ndimage.median_filter(kp_score, 9)
+                kp_score = torch.from_numpy(kp_score).cuda()  # [201]
+                scale = torch.ones((len(kp_score), 1, 1))  # torch.Size([201, 1, 1])
+
+                kp_score.requires_grad = False
+                scale.requires_grad = False
+
+            # smoothing formulation
+            neighbour_dist_idx = 0 if not reverse else -1
+            if refine_config["pose_loss"] == "gm":
+                pose_loss = torch.sum(
+                    (
+                        kp_score.view(-1, 1, 1)
+                        * gmloss(poses_pred - poses_init, refine_config["gm_alpha"])
+                    )[
+                        neighbour_dist_idx,
+                    ]
+                )
+            elif refine_config["pose_loss"] == "capped_l2":
+                pose_loss = torch.sum(
+                    (
+                        kp_score.view(-1, 1, 1)
+                        * capped_l2(
+                            poses_pred - poses_init,
+                            torch.tensor(refine_config["l2_cap"]).float().cuda(),
+                        )
+                    )[
+                        neighbour_dist_idx,
+                    ]
+                )
+            elif refine_config["pose_loss"] == "capped_l2_euc_err":
+                pose_loss = torch.sum(
+                    (
+                        kp_score.view(-1, 1)
+                        * capped_l2_euc_err(
+                            poses_pred,
+                            poses_init,
+                            torch.tensor(refine_config["l2_cap"]).float().cuda(),
+                        )
+                    )[
+                        neighbour_dist_idx,
+                    ]
+                )
+            else:
+                raise NotImplementedError(
+                    "Unknown pose_loss" + refine_config["pose_loss"]
+                )
+
+            velocity_loss_hip = globals()[refine_config["smoothness_loss_hip"]](
+                poses_pred[:, [0], :], 1
+            )[[neighbour_dist_idx]]
+
+            step = refine_config["smoothness_loss_hip_largestep"]
+            vel_loss = globals()[refine_config["smoothness_loss_hip"]](
+                poses_pred[:, [0], :], step
+            )
+            velocity_loss_hip_large = (1 - kp_score[-len(vel_loss) :]) * vel_loss
+
+            velocity_loss_rel = globals()[refine_config["smoothness_loss_rel"]](
+                poses_pred[:, 1:, :], 1
+            )[[neighbour_dist_idx]]
+            vel_loss = globals()[refine_config["smoothness_loss_rel"]](
+                poses_pred[:, 1:, :], step
+            )
+            velocity_loss_rel_large = (1 - kp_score[-len(vel_loss) :]) * vel_loss
+
+            total_loss = (
+                pose_loss
+                + refine_config["smoothness_weight_hip"] * velocity_loss_hip
+                + refine_config["smoothness_weight_hip_large"] * velocity_loss_hip_large
+                + refine_config["smoothness_weight_rel"] * velocity_loss_rel
+                + refine_config["smoothness_weight_rel_large"] * velocity_loss_rel_large
+            )
+            total_loss.backward()
+
+            optimizer.step()
+        optimized_preds_list.append(
+            poses_pred[[neighbour_dist_idx]].detach().cpu().numpy()
         )
-        pck = np.mean(list(pcks.values()))
-        auc = np.mean(list(aucs.values()))
-        values.append(pck)
-        values.append(auc)
 
-        print(" %4.1f   %4.1f  " % (pck, auc), end="")
-    print()
-    exp.log_metrics({f"{prefix}-{k}": v for k, v in zip(keys, values)})
+pred = np.concatenate(optimized_preds_list)
 
+l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
+l.eval(calculate_scale_free=True, verbose=True)
+exp.log_metrics(l.losses_to_log)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "model_name", help="Name of the model (either 'normal' or 'universal')"
+pred_by_seq = {}
+for seq in range(1, 21):
+    inds = test_set.index.seq_num == seq
+    pred_by_seq[seq] = pred[inds]
+pred_2d, pred_3d = unstack_mupots_poses(test_set, pred_by_seq)
+
+print("\nR-PCK  R-AUC  A-PCK  A-AUC")
+keys = ["R-PCK", "R-AUC", "A-PCK", "A-AUC"]
+values = []
+for relative in [True, False]:
+    pcks, aucs = mupots_3d.eval_poses(
+        False,
+        relative,
+        "annot3" if config["pose3d_scaling"] == "normal" else "univ_annot3",
+        pred_2d,
+        pred_3d,
+        keep_matching=True,
     )
-    parser.add_argument(
-        "-r",
-        "--pose-refine",
-        action="store_true",
-        help="Apply pose-refinement after TPN",
-    )
-    args = parser.parse_args()
+    pck = np.mean(list(pcks.values()))
+    auc = np.mean(list(aucs.values()))
+    values.append(pck)
+    values.append(auc)
 
-    exp = ExistingExperiment(previous_experiment=args.model_name)
+    print(" %4.1f   %4.1f  " % (pck, auc), end="")
+print()
+exp.log_metrics({k: v for k, v in zip(keys, values)})
 
-    main(args.model_name, args.pose_refine, exp)

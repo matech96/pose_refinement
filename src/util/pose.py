@@ -61,7 +61,10 @@ def remove_root(data, root_ind):
 
     roots = data[..., [root_ind], :]  # (..., 1, [2|3])
     data = data - roots
-    data = np.delete(data, root_ind, axis=-2)
+    if isinstance(data, torch.Tensor):
+        data = torch.cat([data[..., :root_ind, :], data[..., root_ind + 1:, :]], dim=-2)
+    else:
+        data = np.delete(data, root_ind, axis=-2)
 
     return data
 
