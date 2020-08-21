@@ -19,6 +19,6 @@
   "smoothness_weight_rel_large": 0.01,
   "visibility_smoothing": 0,
   "model_name": "29cbfa0fc1774b9cbb06a3573b7fb711",
-  "reinit": false,
+  "reinit": true,
   "full_batch": false
 }
