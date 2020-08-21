@@ -202,20 +202,20 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
             if refine_config["full_batch"]:
                 total_loss = (
                     torch.sum(pose_loss)
-                    + refine_config["smoothness_weight_hip"] * velocity_loss_hip
+                    + refine_config["smoothness_weight_hip"] * torch.sum(velocity_loss_hip)
                     + refine_config["smoothness_weight_hip_large"]
-                    * velocity_loss_hip_large
-                    + refine_config["smoothness_weight_rel"] * velocity_loss_rel
+                    * torch.sum(velocity_loss_hip_large)
+                    + refine_config["smoothness_weight_rel"] * torch.sum(velocity_loss_rel)
                     + refine_config["smoothness_weight_rel_large"]
-                    * velocity_loss_rel_large
+                    * torch.sum(velocity_loss_rel_large)
                 )
                 m = {
-                    f"{prefix}_total_loss": total_loss,
+                    f"{prefix}_total_loss": total_loss[0],
                     f"{prefix}_pose_loss": torch.sum(pose_loss),
-                    f"{prefix}_velocity_loss_hip": velocity_loss_hip,
-                    f"{prefix}_velocity_loss_hip_large": velocity_loss_hip_large,
-                    f"{prefix}_velocity_loss_rel": velocity_loss_rel,
-                    f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large,
+                    f"{prefix}_velocity_loss_hip": torch.sum(velocity_loss_hip),
+                    f"{prefix}_velocity_loss_hip_large": torch.sum(velocity_loss_hip_large),
+                    f"{prefix}_velocity_loss_rel": torch.sum(velocity_loss_rel),
+                    f"{prefix}_velocity_loss_rel_large": torch.sum(velocity_loss_rel_large),
                 }
             else:
                 total_loss = (
@@ -230,12 +230,12 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                     * velocity_loss_rel_large
                 )
                 m = {
-                    f"{prefix}_total_loss": total_loss,
+                    f"{prefix}_total_loss": total_loss[0],
                     f"{prefix}_pose_loss": torch.sum(pose_loss[neighbour_dist_idx, ]),
-                    f"{prefix}_velocity_loss_hip": velocity_loss_hip[[neighbour_dist_idx]],
-                    f"{prefix}_velocity_loss_hip_large": velocity_loss_hip_large,
-                    f"{prefix}_velocity_loss_rel": velocity_loss_rel[[neighbour_dist_idx]],
-                    f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large,
+                    f"{prefix}_velocity_loss_hip": velocity_loss_hip[neighbour_dist_idx],
+                    f"{prefix}_velocity_loss_hip_large": velocity_loss_hip_large[0],
+                    f"{prefix}_velocity_loss_rel": velocity_loss_rel[neighbour_dist_idx],
+                    f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large[0],
                 }
 
             total_loss.backward()
