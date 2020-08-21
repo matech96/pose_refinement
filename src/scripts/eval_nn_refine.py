@@ -162,7 +162,7 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                 scale.requires_grad = False
 
             # smoothing formulation
-            neighbour_dist_idx = 0 if not reverse else -1
+            
             if refine_config["pose_loss"] == "gm":
                 pose_loss = kp_score.view(-1, 1, 1) * gmloss(
                     poses_pred - poses_init, refine_config["gm_alpha"]
@@ -221,6 +221,7 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                     f"{prefix}_velocity_loss_rel_large": torch.sum(velocity_loss_rel_large),
                 }
             else:
+                neighbour_dist_idx = 0 if not reverse else -1
                 total_loss = (
                     torch.sum(pose_loss[neighbour_dist_idx, ])
                     + refine_config["smoothness_weight_hip"]
