@@ -30,8 +30,6 @@ from databases import mupots_3d
 
 
 LOG_PATH = "../models"
-model_name = "29cbfa0fc1774b9cbb06a3573b7fb711"
-lr = 0.0001
 
 exp = Experiment(workspace="pose-refinement", project_name="05-nn-refine")
 
@@ -79,40 +77,62 @@ def extract_post(model_name, test_set):
     return get_postprocessor(config, test_set, normalizer3d)
 
 
+refine_config = load("scripts/nn_refine_config.json")
+exp.log_metrics(refine_config)
+
+model_name = refine_config["model_name"]
 config, model = load_model(model_name)
 test_set = get_dataset(config)
 post_process_func = extract_post(model_name, test_set)
 
-refine_config = load("../models/pose_refine_config.json")
 joint_set = MuPoTSJoints()
 
 pad = (model.receptive_field() - 1) // 2
 generator = UnchunkedGenerator(test_set, pad, True)
 seqs = sorted(np.unique(test_set.index.seq))
 
-refine_config["learning_rate"] = lr
-
 optimized_preds_list = []
-for i, (pose2d, valid) in enumerate(generator):
-    for j in range(valid.shape[-1]):
-        if (j + 1) > (valid.shape[-1] - refine_config["smoothness_loss_hip_largestep"]):
-            reverse = True
-            f = j - refine_config["smoothness_loss_hip_largestep"]
-            t = j + 1
-        else:
-            reverse = False
-            f = j
-            t = f + refine_config["smoothness_loss_hip_largestep"] + 1
+max_batch = len(generator)
+exp.log_parameter("max_batch", max_batch)
+for curr_batch, (pose2d, valid) in enumerate(generator):
+    exp.log_parameter("curr_batch", curr_batch)
+    exp.log_parameter("curr_batch%", curr_batch / max_batch)
+    if refine_config["full_batch"]:
+        max_item = 1
+    else:
+        max_item = valid.shape[-1]
+    for curr_item in range(max_item):
+        if not refine_config["full_batch"]:
+            exp.log_parameter("curr_item", curr_item)
+            exp.log_parameter("curr_item%", curr_item / max_item)
+            if (curr_item + 1) > (
+                max_item - refine_config["smoothness_loss_hip_largestep"]
+            ):
+                reverse = True
+                f = curr_item - refine_config["smoothness_loss_hip_largestep"]
+                t = curr_item + 1
+            else:
+                reverse = False
+                f = curr_item
+                t = f + refine_config["smoothness_loss_hip_largestep"] + 1
         model_ = copy.deepcopy(model)
         optimizer = get_optimizer(model_.parameters(), refine_config)
-        for k in range(refine_config["num_iter"]):
+        max_iter = refine_config["num_iter"]
+        for curr_iter in range(max_iter):
+            exp.log_parameter("curr_iter", curr_iter)
+            exp.log_parameter("curr_iter%", curr_iter / max_iter)
             optimizer.zero_grad()
 
-            seq = seqs[i]
+            seq = seqs[curr_batch]
+            if refine_config["full_batch"]:
+                nn_input = pose2d
+                valid_ = valid[0]
+            else:
+                nn_input = pose2d[:, f : t + 2 * pad, :]
+                valid_ = valid[0][f:t]
             pred3d = model_(
-                torch.from_numpy(pose2d[:, f : t + 2 * pad, :]).cuda()
+                torch.from_numpy(nn_input).cuda()
             )  # [2, 401, 42] -> [2, 21+2*13, 42], pred3d: [21, 16, 3]
-            valid_ = valid[0][f:t]
 
             pred_real_pose = post_process_func(pred3d[0], seq)  # unnormalized output
 
@@ -126,7 +146,7 @@ for i, (pose2d, valid) in enumerate(generator):
             inds = test_set.index.seq == seq
 
             poses_pred = abs_to_hiprel(pred, joint_set) / 1000  # (201, 17, 3)
-            if k == 0:
+            if refine_config["reinit"] or (curr_iter == 0):
                 poses_init = poses_pred.detach().clone()
                 poses_init.requires_grad = False
                 kp_score = np.mean(test_set.poses2d[inds, :, 2], axis=-1)[f:t]  # (201,)
@@ -141,38 +161,19 @@ for i, (pose2d, valid) in enumerate(generator):
             # smoothing formulation
             neighbour_dist_idx = 0 if not reverse else -1
             if refine_config["pose_loss"] == "gm":
-                pose_loss = torch.sum(
-                    (
-                        kp_score.view(-1, 1, 1)
-                        * gmloss(poses_pred - poses_init, refine_config["gm_alpha"])
-                    )[
-                        neighbour_dist_idx,
-                    ]
+                pose_loss = kp_score.view(-1, 1, 1) * gmloss(
+                    poses_pred - poses_init, refine_config["gm_alpha"]
                 )
             elif refine_config["pose_loss"] == "capped_l2":
-                pose_loss = torch.sum(
-                    (
-                        kp_score.view(-1, 1, 1)
-                        * capped_l2(
-                            poses_pred - poses_init,
-                            torch.tensor(refine_config["l2_cap"]).float().cuda(),
-                        )
-                    )[
-                        neighbour_dist_idx,
-                    ]
+                pose_loss = kp_score.view(-1, 1, 1) * capped_l2(
+                    poses_pred - poses_init,
+                    torch.tensor(refine_config["l2_cap"]).float().cuda(),
                 )
             elif refine_config["pose_loss"] == "capped_l2_euc_err":
-                pose_loss = torch.sum(
-                    (
-                        kp_score.view(-1, 1)
-                        * capped_l2_euc_err(
-                            poses_pred,
-                            poses_init,
-                            torch.tensor(refine_config["l2_cap"]).float().cuda(),
-                        )
-                    )[
-                        neighbour_dist_idx,
-                    ]
+                pose_loss = kp_score.view(-1, 1) * capped_l2_euc_err(
+                    poses_pred,
+                    poses_init,
+                    torch.tensor(refine_config["l2_cap"]).float().cuda(),
                 )
             else:
                 raise NotImplementedError(
@@ -181,7 +182,7 @@ for i, (pose2d, valid) in enumerate(generator):
 
             velocity_loss_hip = globals()[refine_config["smoothness_loss_hip"]](
                 poses_pred[:, [0], :], 1
-            )[[neighbour_dist_idx]]
+            )
 
             step = refine_config["smoothness_loss_hip_largestep"]
             vel_loss = globals()[refine_config["smoothness_loss_hip"]](
@@ -191,25 +192,45 @@ for i, (pose2d, valid) in enumerate(generator):
 
             velocity_loss_rel = globals()[refine_config["smoothness_loss_rel"]](
                 poses_pred[:, 1:, :], 1
-            )[[neighbour_dist_idx]]
+            )
             vel_loss = globals()[refine_config["smoothness_loss_rel"]](
                 poses_pred[:, 1:, :], step
             )
             velocity_loss_rel_large = (1 - kp_score[-len(vel_loss) :]) * vel_loss
 
-            total_loss = (
-                pose_loss
-                + refine_config["smoothness_weight_hip"] * velocity_loss_hip
-                + refine_config["smoothness_weight_hip_large"] * velocity_loss_hip_large
-                + refine_config["smoothness_weight_rel"] * velocity_loss_rel
-                + refine_config["smoothness_weight_rel_large"] * velocity_loss_rel_large
-            )
+            if refine_config["full_batch"]:
+                total_loss = (
+                    torch.sum(pose_loss)
+                    + refine_config["smoothness_weight_hip"] * velocity_loss_hip
+                    + refine_config["smoothness_weight_hip_large"]
+                    * velocity_loss_hip_large
+                    + refine_config["smoothness_weight_rel"] * velocity_loss_rel
+                    + refine_config["smoothness_weight_rel_large"]
+                    * velocity_loss_rel_large
+                )
+            else:
+                total_loss = (
+                    torch.sum(pose_loss[neighbour_dist_idx,])
+                    + refine_config["smoothness_weight_hip"]
+                    * velocity_loss_hip[[neighbour_dist_idx]]
+                    + refine_config["smoothness_weight_hip_large"]
+                    * velocity_loss_hip_large
+                    + refine_config["smoothness_weight_rel"]
+                    * velocity_loss_rel[[neighbour_dist_idx]]
+                    + refine_config["smoothness_weight_rel_large"]
+                    * velocity_loss_rel_large
+                )
             total_loss.backward()
 
             optimizer.step()
-        optimized_preds_list.append(
-            poses_pred[[neighbour_dist_idx]].detach().cpu().numpy()
-        )
+
+        if refine_config["full_batch"]:
+            optimized_preds_list.append(poses_pred.detach().cpu().numpy())
+        else:
+            optimized_preds_list.append(
+                poses_pred[[neighbour_dist_idx]].detach().cpu().numpy()
+            )
+
 
 pred = np.concatenate(optimized_preds_list)
 
@@ -242,5 +263,4 @@ for relative in [True, False]:
 
     print(" %4.1f   %4.1f  " % (pck, auc), end="")
 print()
-exp.log_metrics({k: v for k, v in zip(keys, values)})
-
+exp.log_metrics({curr_iter: v for curr_iter, v in zip(keys, values)})

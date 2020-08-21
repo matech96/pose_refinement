@@ -54,6 +54,9 @@ class UnchunkedGenerator:
             #             yield {'pose2d': batch_2d, 'pose3d':batch_3d}
             yield batch_2d, batch_valid
 
+    def __len__(self):
+        return len(self.seqs)
+
 
 
 
