@@ -241,6 +241,7 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
             total_loss.backward()
             optimizer.step()
 
+            m = {k: v.detach().cpu().numpy() for k, v in m.items()}
             exp.log_metrics(m, step=curr_iter)
 
         if refine_config["full_batch"]:
