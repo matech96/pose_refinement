@@ -198,6 +198,7 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
             )
             velocity_loss_rel_large = (1 - kp_score[-len(vel_loss) :]) * vel_loss
 
+            prefix = f"{curr_batch}_{curr_item}"
             if refine_config["full_batch"]:
                 total_loss = (
                     torch.sum(pose_loss)
@@ -208,9 +209,17 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                     + refine_config["smoothness_weight_rel_large"]
                     * velocity_loss_rel_large
                 )
+                m = {
+                    f"{prefix}_total_loss": total_loss,
+                    f"{prefix}_pose_loss": torch.sum(pose_loss),
+                    f"{prefix}_velocity_loss_hip": velocity_loss_hip,
+                    f"{prefix}_velocity_loss_hip_large": velocity_loss_hip_large,
+                    f"{prefix}_velocity_loss_rel": velocity_loss_rel,
+                    f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large,
+                }
             else:
                 total_loss = (
-                    torch.sum(pose_loss[neighbour_dist_idx,])
+                    torch.sum(pose_loss[neighbour_dist_idx, ])
                     + refine_config["smoothness_weight_hip"]
                     * velocity_loss_hip[[neighbour_dist_idx]]
                     + refine_config["smoothness_weight_hip_large"]
@@ -220,9 +229,19 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                     + refine_config["smoothness_weight_rel_large"]
                     * velocity_loss_rel_large
                 )
-            total_loss.backward()
+                m = {
+                    f"{prefix}_total_loss": total_loss,
+                    f"{prefix}_pose_loss": torch.sum(pose_loss[neighbour_dist_idx, ]),
+                    f"{prefix}_velocity_loss_hip": velocity_loss_hip[[neighbour_dist_idx]],
+                    f"{prefix}_velocity_loss_hip_large": velocity_loss_hip_large,
+                    f"{prefix}_velocity_loss_rel": velocity_loss_rel[[neighbour_dist_idx]],
+                    f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large,
+                }
 
+            total_loss.backward()
             optimizer.step()
+
+            exp.log_metrics(m, step=curr_iter)
 
         if refine_config["full_batch"]:
             optimized_preds_list.append(poses_pred.detach().cpu().numpy())
