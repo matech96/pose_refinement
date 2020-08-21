@@ -149,7 +149,10 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
             if refine_config["reinit"] or (curr_iter == 0):
                 poses_init = poses_pred.detach().clone()
                 poses_init.requires_grad = False
-                kp_score = np.mean(test_set.poses2d[inds, :, 2], axis=-1)[f:t]  # (201,)
+                if not refine_config["full_batch"]:
+                    kp_score = np.mean(test_set.poses2d[inds, :, 2], axis=-1)[f:t]  # (201,)
+                else:
+                    kp_score = np.mean(test_set.poses2d[inds, :, 2], axis=-1)  # (201,)
                 #     if refine_config['smooth_visibility']:
                 #         kp_score = ndimage.median_filter(kp_score, 9)
                 kp_score = torch.from_numpy(kp_score).cuda()  # [201]
