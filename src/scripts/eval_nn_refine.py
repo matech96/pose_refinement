@@ -213,7 +213,7 @@ for curr_batch, (pose2d, valid) in enumerate(generator):
                     * torch.sum(velocity_loss_rel_large)
                 )
                 m = {
-                    f"{prefix}_total_loss": total_loss[0],
+                    f"{prefix}_total_loss": total_loss,
                     f"{prefix}_pose_loss": torch.sum(pose_loss),
                     f"{prefix}_velocity_loss_hip": torch.sum(velocity_loss_hip),
                     f"{prefix}_velocity_loss_hip_large": torch.sum(velocity_loss_hip_large),
