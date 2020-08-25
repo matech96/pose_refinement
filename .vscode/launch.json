@@ -23,7 +23,7 @@
             "cwd": "/workspace/src",
             "args": [
                 "29cbfa0fc1774b9cbb06a3573b7fb711",
-                "-r"
+                // "-r"
             ]
         }
     ]
