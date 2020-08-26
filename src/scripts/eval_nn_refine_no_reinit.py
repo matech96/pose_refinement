@@ -32,11 +32,6 @@ from databases import mupots_3d
 
 LOG_PATH = "../models"
 
-exp = Experiment(
-    workspace="pose-refinement", project_name="05-nn-refine", display_summary_level=0
-)
-
-
 def load_model(model_folder):
     config = load(os.path.join(LOG_PATH, model_folder, "config.json"))
     path = os.path.join(LOG_PATH, model_folder, "model_params.pkl")
@@ -84,6 +79,11 @@ def run(**kwargs):
     refine_config = load("scripts/nn_refine_config.json")
     for k, v in kwargs.items():
         refine_config[k] = v
+    exp = Experiment(
+        workspace="pose-refinement",
+        project_name="05-nn-refine",
+        display_summary_level=0,
+    )
     exp.log_parameters(refine_config)
 
     model_name = refine_config["model_name"]
