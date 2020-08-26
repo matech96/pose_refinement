@@ -84,7 +84,7 @@ def run(**kwargs):
     refine_config = load("scripts/nn_refine_config.json")
     for k, v in kwargs.items():
         refine_config[k] = v
-    exp.log_metrics(refine_config)
+    exp.log_parameters(refine_config)
 
     model_name = refine_config["model_name"]
     config, model = load_model(model_name)
