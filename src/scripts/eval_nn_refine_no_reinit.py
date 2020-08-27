@@ -32,6 +32,7 @@ from databases import mupots_3d
 
 LOG_PATH = "../models"
 
+
 def load_model(model_folder):
     config = load(os.path.join(LOG_PATH, model_folder, "config.json"))
     path = os.path.join(LOG_PATH, model_folder, "model_params.pkl")
@@ -44,7 +45,7 @@ def load_model(model_folder):
         num_in_features,
         MuPoTSJoints.NUM_JOINTS,
         config["model"]["filter_widths"],
-        dropout=config["model"]["dropout"],
+        dropout=0,
         channels=config["model"]["channels"],
         layernorm=config["model"]["layernorm"],
     )
@@ -322,11 +323,19 @@ def run(**kwargs):
 
 reinit = False
 full_batch = True
-for num_iter in [200, 500, 1000]:
+num_iter = 100
+smoothness_loss_hip_largestep = 20
+large_mult = 0.7
+for rel_mult in np.arange(21) / 10:
     for learning_rate in [0.01, 0.001, 0.0001, 0.00001]:
         run(
             full_batch=full_batch,
             reinit=reinit,
             num_iter=num_iter,
             learning_rate=learning_rate,
+            smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+            smoothness_weight_hip=1,
+            smoothness_weight_hip_large=large_mult,
+            smoothness_weight_rel=rel_mult,
+            smoothness_weight_rel_large=rel_mult * large_mult,
         )
