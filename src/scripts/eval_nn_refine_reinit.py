@@ -322,12 +322,12 @@ def run(**kwargs):
 
 
 reinit = True
-for full_batch in [True, False]:
-    for num_iter in [10, 20, 100]:
-        for learning_rate in [0.001, 0.0001, 0.00001]:
-            run(
-                full_batch=full_batch,
-                reinit=reinit,
-                num_iter=num_iter,
-                learning_rate=learning_rate,
-            )
+full_batch = True
+for num_iter in [200, 500, 1000]:
+    for learning_rate in [0.01, 0.001, 0.0001, 0.00001]:
+        run(
+            full_batch=full_batch,
+            reinit=reinit,
+            num_iter=num_iter,
+            learning_rate=learning_rate,
+        )
