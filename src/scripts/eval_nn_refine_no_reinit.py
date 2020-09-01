@@ -322,20 +322,20 @@ def run(**kwargs):
 
 
 reinit = False
-full_batch = True
+full_batch = False
 num_iter = 100
 smoothness_loss_hip_largestep = 20
 large_mult = 0.1
 learning_rate = 0.001
-for rel_mult in np.arange(21) / 10:
-    run(
-        full_batch=full_batch,
-        reinit=reinit,
-        num_iter=num_iter,
-        learning_rate=learning_rate,
-        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-        smoothness_weight_hip=1,
-        smoothness_weight_hip_large=large_mult,
-        smoothness_weight_rel=rel_mult,
-        smoothness_weight_rel_large=rel_mult * large_mult,
-    )
+rel_mult = 0.1
+run(
+    full_batch=full_batch,
+    reinit=reinit,
+    num_iter=num_iter,
+    learning_rate=learning_rate,
+    smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+    smoothness_weight_hip=1,
+    smoothness_weight_hip_large=large_mult,
+    smoothness_weight_rel=rel_mult,
+    smoothness_weight_rel_large=rel_mult * large_mult,
+)
