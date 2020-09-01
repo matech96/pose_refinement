@@ -5,6 +5,5 @@ output
 .workspace/*
 .vscode/.ropeproject/*
 .virtual_documents/*
-src/notebooks/*
 **.npy
 **.npz
