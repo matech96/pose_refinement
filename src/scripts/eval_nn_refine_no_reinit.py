@@ -325,17 +325,17 @@ reinit = False
 full_batch = True
 num_iter = 100
 smoothness_loss_hip_largestep = 20
-large_mult = 0.7
+large_mult = 0.1
+learning_rate = 0.001
 for rel_mult in np.arange(21) / 10:
-    for learning_rate in [0.01, 0.001, 0.0001, 0.00001]:
-        run(
-            full_batch=full_batch,
-            reinit=reinit,
-            num_iter=num_iter,
-            learning_rate=learning_rate,
-            smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-            smoothness_weight_hip=1,
-            smoothness_weight_hip_large=large_mult,
-            smoothness_weight_rel=rel_mult,
-            smoothness_weight_rel_large=rel_mult * large_mult,
-        )
+    run(
+        full_batch=full_batch,
+        reinit=reinit,
+        num_iter=num_iter,
+        learning_rate=learning_rate,
+        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+        smoothness_weight_hip=1,
+        smoothness_weight_hip_large=large_mult,
+        smoothness_weight_rel=rel_mult,
+        smoothness_weight_rel_large=rel_mult * large_mult,
+    )
