@@ -267,52 +267,52 @@ if __name__ == "__main__":
     layernorm = "none"
     ordered_batch = False
 
-    for data in ["mpii_train", "mpii+muco"]:
-        exp = Experiment(
-            workspace="pose-refinement",
-            project_name="06-nn-refine-large",
-        )
+    data = "mpii_train"  # "mpii+muco"
+    exp = Experiment(
+        workspace="pose-refinement",
+        project_name="06-nn-refine-large",
+    )
 
-        if args.output is None:
-            output_path = f"../models/{exp.get_key()}"
-        else:
-            output_path = args.output
+    if args.output is None:
+        output_path = f"../models/{exp.get_key()}"
+    else:
+        output_path = args.output
 
-        params = {
-            "num_epochs": 80,
-            "preprocess_2d": "DepthposeNormalize2D",
-            "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-            "shuffle": True,
-            "ordered_batch": ordered_batch,
-            # training
-            "optimiser": "adam",
-            "adam_amsgrad": True,
-            "learning_rate": 1e-3,
-            "sgd_momentum": 0,
-            "batch_size": 1024,
-            "train_time_flip": True,
-            "test_time_flip": True,
-            "lr_scheduler": {
-                "type": "multiplicative",
-                "multiplier": 0.95,
-                "step_size": 1,
-            },
-            # dataset
-            "train_data": data,
-            "pose2d_type": "hrnet",
-            "pose3d_scaling": "normal",
-            "megadepth_type": "megadepth_at_hrnet",
-            "cap_25fps": True,
-            "stride": 2,
-            "simple_aug": True,  # augments data by duplicating each frame
-            "model": {
-                "loss": "l1",
-                "channels": 1024,
-                "dropout": 0.25,
-                "filter_widths": [3, 3, 3, 3],
-                "layernorm": layernorm,  # False,
-            },
-        }
-        run_experiment(output_path, params, exp)
-        eval.main(output_path, False, exp)
-        eval.main(output_path, True, exp)
+    params = {
+        "num_epochs": 80,
+        "preprocess_2d": "DepthposeNormalize2D",
+        "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+        "shuffle": True,
+        "ordered_batch": ordered_batch,
+        # training
+        "optimiser": "adam",
+        "adam_amsgrad": True,
+        "learning_rate": 1e-3,
+        "sgd_momentum": 0,
+        "batch_size": 1024,
+        "train_time_flip": True,
+        "test_time_flip": True,
+        "lr_scheduler": {
+            "type": "multiplicative",
+            "multiplier": 0.95,
+            "step_size": 1,
+        },
+        # dataset
+        "train_data": data,
+        "pose2d_type": "hrnet",
+        "pose3d_scaling": "normal",
+        "megadepth_type": "megadepth_at_hrnet",
+        "cap_25fps": True,
+        "stride": 2,
+        "simple_aug": True,  # augments data by duplicating each frame
+        "model": {
+            "loss": "l1",
+            "channels": 1024,
+            "dropout": 0.25,
+            "filter_widths": [3, 3, 3, 3],
+            "layernorm": layernorm,  # False,
+        },
+    }
+    run_experiment(output_path, params, exp)
+    eval.main(output_path, False, exp)
+    eval.main(output_path, True, exp)
