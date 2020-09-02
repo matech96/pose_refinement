@@ -267,7 +267,7 @@ if __name__ == "__main__":
     layernorm = "none"
     ordered_batch = False
 
-    data = "mpii_train"  # "mpii+muco"
+    data = "mpii+muco"
     exp = Experiment(
         workspace="pose-refinement",
         project_name="06-nn-refine-large",
