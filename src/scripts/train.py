@@ -270,7 +270,7 @@ if __name__ == "__main__":
     for data in ["mpii_train", "mpii+muco"]:
         exp = Experiment(
             workspace="pose-refinement",
-            project_name="03-batch-shuffle-norm-selection",
+            project_name="06-nn-refine-large",
         )
 
         if args.output is None:
@@ -279,7 +279,7 @@ if __name__ == "__main__":
             output_path = args.output
 
         params = {
-            "num_epochs": 15,
+            "num_epochs": 80,
             "preprocess_2d": "DepthposeNormalize2D",
             "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
             "shuffle": True,
@@ -307,9 +307,9 @@ if __name__ == "__main__":
             "simple_aug": True,  # augments data by duplicating each frame
             "model": {
                 "loss": "l1",
-                "channels": 512,
+                "channels": 1024,
                 "dropout": 0.25,
-                "filter_widths": [3, 3, 3],
+                "filter_widths": [3, 3, 3, 3],
                 "layernorm": layernorm,  # False,
             },
         }
