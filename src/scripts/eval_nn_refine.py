@@ -328,7 +328,7 @@ smoothness_loss_hip_largestep = 20
 large_mult = 0.1
 learning_rate = 0.001
 rel_mult = 0.1
-model_name = "cb01377a933c4dd08272f5468cc095af"
+model_name = "e665b873d3954dd19c2cf427cc61b6e9"
 run(    
     full_batch=full_batch,
     reinit=reinit,
