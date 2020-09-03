@@ -82,7 +82,7 @@ def run(**kwargs):
         refine_config[k] = v
     exp = Experiment(
         workspace="pose-refinement",
-        project_name="05-nn-refine",
+        project_name="06-nn-refine-large",
         display_summary_level=0,
     )
     exp.log_parameters(refine_config)
@@ -322,13 +322,14 @@ def run(**kwargs):
 
 
 reinit = False
-full_batch = False
+full_batch = True
 num_iter = 100
 smoothness_loss_hip_largestep = 20
 large_mult = 0.1
 learning_rate = 0.001
 rel_mult = 0.1
-run(
+model_name = "cb01377a933c4dd08272f5468cc095af"
+run(    
     full_batch=full_batch,
     reinit=reinit,
     num_iter=num_iter,
@@ -338,4 +339,5 @@ run(
     smoothness_weight_hip_large=large_mult,
     smoothness_weight_rel=rel_mult,
     smoothness_weight_rel_large=rel_mult * large_mult,
+    model_name=model_name,
 )
