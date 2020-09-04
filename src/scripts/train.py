@@ -264,10 +264,10 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="folder to save the model to")
     args = parser.parse_args()
 
-    layernorm = "none"
+    layernorm = "batchnorm"
     ordered_batch = False
 
-    data = "mpii+muco"
+    data = "mpii_train"
     exp = Experiment(
         workspace="pose-refinement",
         project_name="06-nn-refine-large",
