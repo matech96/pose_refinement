@@ -233,7 +233,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config),
+        lambda m, b: calc_loss(m, b, _config, None, None, None),
         # lambda m, b: calc_loss(
         #     m,
         #     b,
