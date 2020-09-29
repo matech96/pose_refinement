@@ -282,7 +282,7 @@ def run(**kwargs):
 
                 total_loss.backward()
                 optimizer.step()
-                print(m)
+                # print(m)
 
                 # m = {k: v.detach().cpu().numpy() for k, v in m.items()}
                 # exp.log_metrics(m, step=curr_iter)
