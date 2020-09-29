@@ -344,7 +344,7 @@ if __name__ == "__main__":
     learning_rate = 0.001
     rel_mult = 0.1
     model_name = "e665b873d3954dd19c2cf427cc61b6e9"
-    for b in [0.1, 0.01, 0.001, 0.0001]:
+    for b in [1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
         run(
             full_batch=full_batch,
             reinit=reinit,
