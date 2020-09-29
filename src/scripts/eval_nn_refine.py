@@ -321,23 +321,24 @@ def run(**kwargs):
     exp.log_metrics({curr_iter: v for curr_iter, v in zip(keys, values)})
 
 
-reinit = False
-full_batch = True
-num_iter = 100
-smoothness_loss_hip_largestep = 20
-large_mult = 0.1
-learning_rate = 0.001
-rel_mult = 0.1
-model_name = "e665b873d3954dd19c2cf427cc61b6e9"
-run(    
-    full_batch=full_batch,
-    reinit=reinit,
-    num_iter=num_iter,
-    learning_rate=learning_rate,
-    smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-    smoothness_weight_hip=1,
-    smoothness_weight_hip_large=large_mult,
-    smoothness_weight_rel=rel_mult,
-    smoothness_weight_rel_large=rel_mult * large_mult,
-    model_name=model_name,
-)
+if __name__ == "__main__":
+    reinit = False
+    full_batch = True
+    num_iter = 100
+    smoothness_loss_hip_largestep = 20
+    large_mult = 0.1
+    learning_rate = 0.001
+    rel_mult = 0.1
+    model_name = "e665b873d3954dd19c2cf427cc61b6e9"
+    run(    
+        full_batch=full_batch,
+        reinit=reinit,
+        num_iter=num_iter,
+        learning_rate=learning_rate,
+        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+        smoothness_weight_hip=1,
+        smoothness_weight_hip_large=large_mult,
+        smoothness_weight_rel=rel_mult,
+        smoothness_weight_rel_large=rel_mult * large_mult,
+        model_name=model_name,
+    )
