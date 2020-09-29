@@ -82,7 +82,7 @@ def run(**kwargs):
         refine_config[k] = v
     exp = Experiment(
         workspace="pose-refinement",
-        project_name="06-nn-refine-large",
+        project_name="07-nn-ref-bone",
         display_summary_level=0,
     )
     exp.log_parameters(refine_config)
@@ -93,6 +93,7 @@ def run(**kwargs):
     post_process_func = extract_post(model_name, test_set, config)
 
     joint_set = MuPoTSJoints()
+    connected_joints = joint_set.LIMBGRAPH
 
     pad = (model.receptive_field() - 1) // 2
     generator = UnchunkedGenerator(test_set, pad, True)
@@ -255,7 +256,7 @@ def run(**kwargs):
                     m = {
                         f"{prefix}_total_loss": total_loss[0],
                         f"{prefix}_pose_loss": torch.sum(
-                            pose_loss[neighbour_dist_idx,]
+                            pose_loss[neighbour_dist_idx, ]
                         ),
                         f"{prefix}_velocity_loss_hip": velocity_loss_hip[
                             neighbour_dist_idx
@@ -267,8 +268,21 @@ def run(**kwargs):
                         f"{prefix}_velocity_loss_rel_large": velocity_loss_rel_large[0],
                     }
 
+                if refine_config["bone_weight"] != 0:
+                    assert refine_config["full_batch"]
+
+                    diff = (
+                        pred[:, [j[0] for j in connected_joints], :]
+                        - pred[:, [j[1] for j in connected_joints], :]
+                    )
+                    err = torch.sqrt(torch.mean(diff * diff, dim=2))  # TODO IQR
+                    err = torch.mean(torch.std(err, dim=0)) * refine_config["bone_weight"]
+                    total_loss += err
+                    m["bone_err"] = err
+
                 total_loss.backward()
                 optimizer.step()
+                print(m)
 
                 # m = {k: v.detach().cpu().numpy() for k, v in m.items()}
                 # exp.log_metrics(m, step=curr_iter)
@@ -330,15 +344,17 @@ if __name__ == "__main__":
     learning_rate = 0.001
     rel_mult = 0.1
     model_name = "e665b873d3954dd19c2cf427cc61b6e9"
-    run(    
-        full_batch=full_batch,
-        reinit=reinit,
-        num_iter=num_iter,
-        learning_rate=learning_rate,
-        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-        smoothness_weight_hip=1,
-        smoothness_weight_hip_large=large_mult,
-        smoothness_weight_rel=rel_mult,
-        smoothness_weight_rel_large=rel_mult * large_mult,
-        model_name=model_name,
-    )
+    for b in [0.1, 0.01, 0.001, 0.0001]:
+        run(
+            full_batch=full_batch,
+            reinit=reinit,
+            num_iter=num_iter,
+            learning_rate=learning_rate,
+            smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+            smoothness_weight_hip=1,
+            smoothness_weight_hip_large=large_mult,
+            smoothness_weight_rel=rel_mult,
+            smoothness_weight_rel_large=rel_mult * large_mult,
+            model_name=model_name,
+            bone_weight=b
+        )

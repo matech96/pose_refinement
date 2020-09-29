@@ -68,7 +68,7 @@ class UnchunkedGenerator:
     def __len__(self):
         return len(self.seqs)
 
-    def __to_yield(self, batch_2d, batch_3d, batch_valid):
+    def _to_yield(self, batch_2d, batch_3d, batch_valid):
         return batch_2d, batch_valid
 
 

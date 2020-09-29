@@ -20,5 +20,6 @@
   "visibility_smoothing": 0,
   "model_name": "29cbfa0fc1774b9cbb06a3573b7fb711",
   "reinit": false,
-  "full_batch": true
+  "full_batch": true,
+  "bone_weight": 0
 }

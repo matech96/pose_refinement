@@ -502,7 +502,7 @@ class Mpi3dTrainDataset(FlippableDataset, TemporalAugmentMixin):
 class PersonStackedMucoTempDataset(FlippableDataset, TemporalAugmentMixin):
     """ This dataset contains Muco-Temp poses, poses on the same frame are separated. """
 
-    def __init__(self, pose2d_type, pose3d_scaling):
+    def __init__(self, pose2d_type, pose3d_scaling, v='v1'):
         assert pose2d_type == 'hrnet', "only hrnet is implemented"
         assert pose3d_scaling in ['univ', 'normal']
 
@@ -523,16 +523,16 @@ class PersonStackedMucoTempDataset(FlippableDataset, TemporalAugmentMixin):
         index = []
 
         calibs = mpii_3dhp.get_calibration_matrices()
-        meta_data = muco_temp.get_metadata()
+        meta_data = muco_temp.get_metadata(v=v)
 
         for cam in range(11):
-            gt = muco_temp.load_gt(cam)
+            gt = muco_temp.load_gt(cam, v=v)
 
             for vid in range(7):
                 orig_shape = gt[vid][pose3d_key].shape  # (nFrames, nPoses, nJoints, 3)
                 poses3d.append(_column_stack(gt[vid][pose3d_key]))
 
-                kp = muco_temp.load_hrnet(cam, vid)
+                kp = muco_temp.load_hrnet(cam, vid, v=v)
                 poses2d.append(_column_stack(kp['poses']))
                 valid_2d_pred.append(_column_stack(kp['is_valid']))
 
