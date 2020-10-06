@@ -256,7 +256,7 @@ def run(**kwargs):
                     m = {
                         f"{prefix}_total_loss": total_loss[0],
                         f"{prefix}_pose_loss": torch.sum(
-                            pose_loss[neighbour_dist_idx, ]
+                            pose_loss[neighbour_dist_idx,]
                         ),
                         f"{prefix}_velocity_loss_hip": velocity_loss_hip[
                             neighbour_dist_idx
@@ -274,9 +274,13 @@ def run(**kwargs):
                     diff = (
                         pred[:, [j[0] for j in connected_joints], :]
                         - pred[:, [j[1] for j in connected_joints], :]
-                    )
-                    err = torch.sqrt(torch.mean(diff * diff, dim=2))  # TODO IQR
-                    err = torch.mean(torch.std(err, dim=0)) * refine_config["bone_weight"]
+                    )  # [p, cs, 3] # different number for each joint
+                    err = torch.sqrt(
+                        torch.mean(diff * diff, dim=2)
+                    )  # TODO IQR # [p,cs]
+                    err = (
+                        torch.mean(torch.std(err, dim=0)) * refine_config["bone_weight"]
+                    )  # [cs]
                     total_loss += err
                     m["bone_err"] = err
 
@@ -287,6 +291,11 @@ def run(**kwargs):
                 # m = {k: v.detach().cpu().numpy() for k, v in m.items()}
                 # exp.log_metrics(m, step=curr_iter)
 
+            
+            os.makedirs("nn_refs", exist_ok=True)
+            np.save(
+                f"nn_refs/{seq.replace('/', '_')}.npy", pred.cpu().detach().numpy()
+            )
             if refine_config["full_batch"]:
                 optimized_preds_list[seq].append(
                     add_back_hip(poses_pred.detach().cpu().numpy() * 1000, joint_set)
@@ -343,18 +352,19 @@ if __name__ == "__main__":
     large_mult = 0.1
     learning_rate = 0.001
     rel_mult = 0.1
-    model_name = "cb01377a933c4dd08272f5468cc095af"
-    for b in [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
-        run(
-            full_batch=full_batch,
-            reinit=reinit,
-            num_iter=num_iter,
-            learning_rate=learning_rate,
-            smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-            smoothness_weight_hip=1,
-            smoothness_weight_hip_large=large_mult,
-            smoothness_weight_rel=rel_mult,
-            smoothness_weight_rel_large=rel_mult * large_mult,
-            model_name=model_name,
-            bone_weight=b
-        )
+    model_name = "e665b873d3954dd19c2cf427cc61b6e9"
+    b = 0.1
+    # for b in [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
+    run(
+        full_batch=full_batch,
+        reinit=reinit,
+        num_iter=num_iter,
+        learning_rate=learning_rate,
+        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+        smoothness_weight_hip=1,
+        smoothness_weight_hip_large=large_mult,
+        smoothness_weight_rel=rel_mult,
+        smoothness_weight_rel_large=rel_mult * large_mult,
+        model_name=model_name,
+        bone_weight=b,
+    )

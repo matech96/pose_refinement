@@ -7,3 +7,5 @@ output
 .virtual_documents/*
 **.npy
 **.npz
+*.pkl
+*.html
