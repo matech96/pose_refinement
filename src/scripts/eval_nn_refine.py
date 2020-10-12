@@ -273,11 +273,11 @@ def run(**kwargs):
                     assert refine_config["full_batch"]
 
                     err = get_bone_lengths(pred, connected_joints)
-                    err = (
+                    bone_err = (
                         torch.mean(torch.std(err, dim=0)) * refine_config["bone_weight"]
                     )  # [cs]
-                    total_loss += err
-                    m["bone_err"] = err
+                    total_loss += bone_err
+                    m["bone_err"] = bone_err
 
                     gt_bones = get_bone_lengths(
                         torch.from_numpy(gt_pose), connected_joints
