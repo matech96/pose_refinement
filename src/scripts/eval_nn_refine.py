@@ -23,7 +23,7 @@ from databases.joint_sets import MuPoTSJoints
 from databases.datasets import PersonStackedMuPoTsDataset
 from training.preprocess import get_postprocessor, SaveableCompose, MeanNormalize3D
 from training.callbacks import TemporalMupotsEvaluator
-from training.loaders import UnchunkedGenerator
+from training.loaders import UnchunkedGeneratorWithGT
 from training.torch_tools import get_optimizer
 from model.pose_refinement import StackedArrayAllMupotsEvaluator
 from scripts.eval import unstack_mupots_poses
@@ -82,7 +82,7 @@ def run(**kwargs):
         refine_config[k] = v
     exp = Experiment(
         workspace="pose-refinement",
-        project_name="07-nn-ref-bone",
+        project_name="08-nn-ref-bone-length",
         display_summary_level=0,
     )
     exp.log_parameters(refine_config)
@@ -96,13 +96,13 @@ def run(**kwargs):
     connected_joints = joint_set.LIMBGRAPH
 
     pad = (model.receptive_field() - 1) // 2
-    generator = UnchunkedGenerator(test_set, pad, True)
+    generator = UnchunkedGeneratorWithGT(test_set, pad, True)
     seqs = sorted(np.unique(test_set.index.seq))
 
     optimized_preds_list = defaultdict(list)
     max_batch = len(generator)
     exp.log_parameter("max_batch", max_batch)
-    for curr_batch, (pose2d, valid) in enumerate(generator):
+    for curr_batch, (pose2d, valid, pose3d) in enumerate(generator):
         exp.log_parameter("curr_batch", curr_batch)
         exp.log_parameter("curr_batch%", curr_batch / max_batch)
         if refine_config["full_batch"]:
@@ -152,6 +152,7 @@ def run(**kwargs):
                 pred_real_pose = (pred_real_pose + pred_real_pose_aug) / 2
 
                 pred = pred_real_pose[valid_]
+                gt_pose = post_process_func(pose3d[0], seq)
 
                 inds = test_set.index.seq == seq
 
@@ -271,18 +272,20 @@ def run(**kwargs):
                 if refine_config["bone_weight"] != 0:
                     assert refine_config["full_batch"]
 
-                    diff = (
-                        pred[:, [j[0] for j in connected_joints], :]
-                        - pred[:, [j[1] for j in connected_joints], :]
-                    )  # [p, cs, 3] # different number for each joint
-                    err = torch.sqrt(
-                        torch.mean(diff * diff, dim=2)
-                    )  # TODO IQR # [p,cs]
+                    err = get_bone_lengths(pred, connected_joints)
                     err = (
                         torch.mean(torch.std(err, dim=0)) * refine_config["bone_weight"]
                     )  # [cs]
                     total_loss += err
                     m["bone_err"] = err
+
+                    gt_bones = get_bone_lengths(
+                        torch.from_numpy(gt_pose), connected_joints
+                    )
+                    gt_bones = torch.mean(gt_bones, dim=0)
+                    length_err = torch.nn.functional.mse_loss(err, gt_bones.cuda()) * refine_config["bone_length_weight"]
+                    total_loss += length_err
+                    m["bone_length_err"] = length_err
 
                 total_loss.backward()
                 optimizer.step()
@@ -291,11 +294,8 @@ def run(**kwargs):
                 # m = {k: v.detach().cpu().numpy() for k, v in m.items()}
                 # exp.log_metrics(m, step=curr_iter)
 
-            
             os.makedirs("nn_refs", exist_ok=True)
-            np.save(
-                f"nn_refs/{seq.replace('/', '_')}.npy", pred.cpu().detach().numpy()
-            )
+            np.save(f"nn_refs/{seq.replace('/', '_')}.npy", pred.cpu().detach().numpy())
             if refine_config["full_batch"]:
                 optimized_preds_list[seq].append(
                     add_back_hip(poses_pred.detach().cpu().numpy() * 1000, joint_set)
@@ -344,6 +344,14 @@ def run(**kwargs):
     exp.log_metrics({curr_iter: v for curr_iter, v in zip(keys, values)})
 
 
+def get_bone_lengths(pred, connected_joints):
+    diff = (
+        pred[:, [j[0] for j in connected_joints], :]
+        - pred[:, [j[1] for j in connected_joints], :]
+    )  # [p, cs, 3] # different number for each joint
+    return torch.sqrt(torch.mean(diff * diff, dim=2))
+
+
 if __name__ == "__main__":
     reinit = False
     full_batch = True
@@ -354,17 +362,19 @@ if __name__ == "__main__":
     rel_mult = 0.1
     model_name = "e665b873d3954dd19c2cf427cc61b6e9"
     b = 0.1
-    # for b in [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
-    run(
-        full_batch=full_batch,
-        reinit=reinit,
-        num_iter=num_iter,
-        learning_rate=learning_rate,
-        smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
-        smoothness_weight_hip=1,
-        smoothness_weight_hip_large=large_mult,
-        smoothness_weight_rel=rel_mult,
-        smoothness_weight_rel_large=rel_mult * large_mult,
-        model_name=model_name,
-        bone_weight=b,
-    )
+    for b in [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
+        for l in [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0]:
+            run(
+                full_batch=full_batch,
+                reinit=reinit,
+                num_iter=num_iter,
+                learning_rate=learning_rate,
+                smoothness_loss_hip_largestep=smoothness_loss_hip_largestep,
+                smoothness_weight_hip=1,
+                smoothness_weight_hip_large=large_mult,
+                smoothness_weight_rel=rel_mult,
+                smoothness_weight_rel_large=rel_mult * large_mult,
+                model_name=model_name,
+                bone_weight=b,
+                bone_length_weight=l
+            )

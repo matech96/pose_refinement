@@ -21,5 +21,6 @@
   "model_name": " e665b873d3954dd19c2cf427cc61b6e9",
   "reinit": false,
   "full_batch": true,
-  "bone_weight": 0
+  "bone_weight": 0,
+  "bone_length_weight": 0
 }
