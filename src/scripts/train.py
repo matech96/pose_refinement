@@ -45,10 +45,12 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
         gt_3d = batch["pose3d"]
-
-        # different handling for numpy and PyTorch inputs
+        if config['ignore_invisible']:
+            pose2d = pose2d[batch['valid_pose']]
+            gt_3d = gt_3d[batch['valid_pose']]
+            
         if isinstance(pose2d, torch.Tensor):
-            inds = torch.all(torch.all(1 - (pose2d != pose2d), dim=(-1)), dim=-1)
+            inds = torch.all(torch.all(~torch.isnan(pose2d), dim=(-1)), dim=-1)
             pose2d = pose2d[inds]
             gt_3d = gt_3d[inds]
             pose2d = pose2d.to("cuda")
@@ -63,6 +65,9 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif (loss_type == "l1") or (loss_type == "smooth"):
         pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
         gt_3d = batch["pose3d"]  # [1024, 1, 51]
+        if config['ignore_invisible']:
+            pose2d = pose2d[batch['valid_pose']]
+            gt_3d = gt_3d[batch['valid_pose']]
         pose2d = pose2d.to("cuda")
         gt_3d = gt_3d.to("cuda")
 
@@ -299,6 +304,7 @@ if __name__ == "__main__":
             "step_size": 1,
         },
         # dataset
+        'ignore_invisible': True,
         "train_data": data,
         "pose2d_type": "hrnet",
         "pose3d_scaling": "normal",
