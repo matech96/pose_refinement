@@ -180,7 +180,7 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
 
         if loss == 'l1' or loss == 'l1_nan':
             self.loss = lambda p, t: np.abs(p - t)
-        elif loss == 'l2' or loss == 'smooth':  # TODO calculate the real loss for smooth option
+        elif loss == 'l2' or loss == 'smooth' or loss == 'orient':  # TODO calculate the real loss for smooth and orient options
             self.loss = lambda p, t: np.square(p - t)
 
         super().__init__(data_3d_mm, dataset.pose3d_jointset, post_process3d=post_process3d, csv=None, prefix=prefix)
