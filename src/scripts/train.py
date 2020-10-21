@@ -14,11 +14,13 @@ from databases.datasets import (
 )
 from model.videopose import TemporalModel, TemporalModelOptimized1f
 from model.pose_refinement import capped_l2_euc_err, step_zero_velocity_loss
+from databases.joint_sets import MuPoTSJoints
 from training.callbacks import preds_from_logger, ModelCopyTemporalEvaluator
 from training.loaders import ChunkedGenerator
 from training.preprocess import *
 from training.torch_tools import torch_train
 from util.misc import save, ensuredir
+from util.geom import th_sp2cart
 import copy
 from collections import Iterable
 
@@ -70,6 +72,23 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
             gt_3d = gt_3d[batch['valid_pose']]
         pose2d = pose2d.to("cuda")
         gt_3d = gt_3d.to("cuda")
+    elif loss_type == "orient":
+        pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
+        gt_3d = batch["pose3d"]  # [1024, 1, 51]
+        bl = batch["length"]  # [1024, 16]
+        bo = batch["orientation"]  # [1024, 2, 16]
+        root = batch["root"]  # [1024, 3]
+        if config['ignore_invisible']:
+            pose2d = pose2d[batch['valid_pose']]
+            gt_3d = gt_3d[batch['valid_pose']]
+            bl = bl[batch['valid_pose']]
+            bo = bo[batch['valid_pose']]
+            root = root[batch['valid_pose']]
+        pose2d = pose2d.to("cuda")
+        gt_3d = gt_3d.to("cuda")
+        bl = bl.to("cuda")
+        bo = bo.to("cuda")
+        root = root.to("cuda")
 
     # forward pass
     pred_3d = model(pose2d)  # [1024, 1, 51]
@@ -79,6 +98,22 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
+    elif loss_type == "orient":
+        joint_set = MuPoTSJoints()
+        connected_joints = joint_set.LIMBGRAPH
+        cj = np.array(connected_joints)
+        cj_index = [2, 1, 0, 5, 4, 3, 9, 8, 12, 11, 10, 15, 14, 13, 7, 6]
+        ordered_cj = cj[cj_index, :]
+
+        pred_bo = pred_3d.reshape(bo.shape)
+        pred_bx, pred_by, pred_bz = th_sp2cart(bl, pred_bo[:, 0, :], pred_bo[:, 1, :])
+        pred_bxyz = torch.stack((pred_bx, pred_by, pred_bz), dim=-1)
+        res = torch.zeros((pred_3d.shape[0], 17, 3)).to("cuda")
+        res[:, 14, :] = root
+        for (a, b), i in zip(ordered_cj, cj_index):
+            res[:, a, :] = res[:, b, :] + pred_bxyz[:, i, :]
+        res = res.reshape([pred_3d.shape[0], 1, -1])
+        loss_3d = torch.nn.functional.l1_loss(res, gt_3d)
     elif loss_type == "smooth":
         # _conf_l2_cap = 1
         _conf_large_step = 20
@@ -194,9 +229,11 @@ def run_experiment(output_path, _config, exp: Experiment):
     exp.log_parameter("train data length", len_train)
     exp.log_parameter("test data length", len_test)
 
+    bos = train_data[[0]]["bone_orientation"].shape
+    out_shape = bos[1] * bos[2] if _config["model"]["loss"] == "orient" else MuPoTSJoints.NUM_JOINTS * 3
     model = TemporalModelOptimized1f(
         train_data[[0]]["pose2d"].shape[-1],
-        MuPoTSJoints.NUM_JOINTS,
+        out_shape,
         _config["model"]["filter_widths"],
         dropout=_config["model"]["dropout"],
         channels=_config["model"]["channels"],
@@ -204,7 +241,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     )
     test_model = TemporalModel(
         train_data[[0]]["pose2d"].shape[-1],
-        MuPoTSJoints.NUM_JOINTS,
+        out_shape,
         _config["model"]["filter_widths"],
         dropout=_config["model"]["dropout"],
         channels=_config["model"]["channels"],
@@ -264,6 +301,14 @@ def run_experiment(output_path, _config, exp: Experiment):
         },
     )
 
+class Empty:
+    def __getattribute__(self, key):
+        return empty
+
+
+def empty(*args, **kwargs):
+    return None
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -273,11 +318,13 @@ if __name__ == "__main__":
     layernorm = "batchnorm"
     ordered_batch = False
 
-    data = "mpii+muco"
-    exp = Experiment(
-        workspace="pose-refinement",
-        project_name="09-fixed-baseline",
-    )
+    data = "mpii_train"
+    
+    # exp = Experiment(
+    #     workspace="pose-refinement",
+    #     project_name="09-fixed-baseline",
+    # )
+    exp = Empty()
 
     if args.output is None:
         output_path = f"../models/{exp.get_key()}"
@@ -313,7 +360,7 @@ if __name__ == "__main__":
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
-            "loss": "l1",
+            "loss": "orient", #"l1",
             "channels": 1024,
             "dropout": 0.25,
             "filter_widths": [3, 3, 3, 3],

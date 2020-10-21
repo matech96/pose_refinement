@@ -41,7 +41,7 @@ class TemporalModelBase(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         self.pad = [filter_widths[0] // 2]  # list of padding sizes
-        self.shrink = nn.Conv1d(channels, num_joints_out * 3, 1)
+        self.shrink = nn.Conv1d(channels, num_joints_out, 1)
 
     def set_bn_momentum(self, momentum):
         if self.layernorm == "batchnorm":

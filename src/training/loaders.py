@@ -192,32 +192,39 @@ class ChunkedGenerator:
                 assert np.all(chunk_inds <= batch_frame_end)
 
                 chunk = self.dataset.get_samples(chunk_inds.ravel(), flip.ravel())
-                chunk_pose2d = chunk["pose2d"].reshape(
+                chunk_pose2d = chunk["pose2d"].reshape(  # (82944, 42) -> (1024, 81, 42)
                     chunk_inds.shape + chunk["pose2d"].shape[1:]
                 )
-                chunk_pose3d = chunk["pose3d"].reshape(
+                chunk_pose3d = chunk["pose3d"].reshape(  # (82944, 51) -> (1024, 81, 51)
                     chunk_inds.shape + chunk["pose3d"].shape[1:]
                 )
                 chunk_valid = chunk["valid_pose"].reshape(
                     chunk_inds.shape + chunk["valid_pose"].shape[1:]
                 )
+                chunk_length = chunk["bone_length"].reshape(chunk_inds.shape + chunk["bone_length"].shape[1:])
+                chunk_orientation = chunk["bone_orientation"].reshape(chunk_inds.shape + chunk["bone_orientation"].shape[1:])
+                chunk_root = chunk["root"].reshape(chunk_inds.shape + chunk["root"].shape[1:])
+
                 # for non temporal values select the middle item:
                 chunk_pose3d = chunk_pose3d[:, self.pad]
                 chunk_valid = chunk_valid[:, self.pad]
+                chunk_length = chunk_length[:, self.pad]
+                chunk_orientation = chunk_orientation[:, self.pad]
+                chunk_root = chunk_root[:, self.pad]
 
                 chunk_pose3d = np.expand_dims(chunk_pose3d, 1)
 
-                return chunk_pose2d, chunk_pose3d, chunk_valid
+                return chunk_pose2d, chunk_pose3d, chunk_valid, chunk_length, chunk_orientation, chunk_root
 
         wrapper_dataset = LoadingDataset()
         loader = DataLoader(
             wrapper_dataset,
             sampler=SequentialSampler(wrapper_dataset),
             batch_size=SUB_BATCH,
-            num_workers=4,
+            num_workers=0, # TODO 4
         )
 
-        for chunk_pose2d, chunk_pose3d, chunk_valid in loader:
+        for chunk_pose2d, chunk_pose3d, chunk_valid, chunk_length, chunk_orientation, chunk_root in loader:
             chunk_pose2d = chunk_pose2d.reshape((-1,) + chunk_pose2d.shape[2:])
             chunk_pose3d = chunk_pose3d.reshape((-1,) + chunk_pose3d.shape[2:])
             chunk_valid = chunk_valid.reshape(-1)
@@ -225,5 +232,7 @@ class ChunkedGenerator:
                 "temporal_pose2d": chunk_pose2d,
                 "pose3d": chunk_pose3d,
                 "valid_pose": chunk_valid,
+                "length": chunk_length[0, ],
+                "orientation": chunk_orientation[0, ],
+                "root": chunk_root[0, ]
             }
-

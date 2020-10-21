@@ -3,6 +3,7 @@ import os
 import h5py
 import numpy as np
 from torch.utils.data import Dataset
+from ai import cs
 
 from databases import mupots_3d, mpii_3dhp, muco_temp
 from databases.joint_sets import CocoExJoints, OpenPoseJoints, MuPoTSJoints
@@ -144,6 +145,17 @@ class FlippableDataset(PoseDataset):
             cx = sample['cx'].copy()
             cx[flip] = sample['width'][flip] - cx[flip]
             sample['cx'] = cx
+
+        connected_joints = self.pose3d_jointset.LIMBGRAPH
+        cj = np.array(connected_joints)
+        nd = sample['pose3d']
+        diff = nd[:, cj[:, 0], :] - nd[:, cj[:, 1], :]
+        r, t, p = cs.cart2sp(diff[:, :, 0], diff[:, :, 1], diff[:, :, 2])
+        bone_orientation = np.array(list(zip(t, p)))
+        bone_length = r
+        sample['bone_orientation'] = bone_orientation
+        sample['bone_length'] = bone_length
+        sample["root"] = nd[:, 14, :]
 
         if self.transform:
             sample = self.transform(sample)
