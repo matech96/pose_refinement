@@ -318,7 +318,7 @@ if __name__ == "__main__":
         output_path = args.output
 
     params = {
-        "num_epochs": 1,
+        "num_epochs": 80,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
         "shuffle": True,
