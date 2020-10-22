@@ -93,9 +93,10 @@ def load_model(model_folder):
     weights = torch.load(path)
     num_in_features = weights["expand_conv.weight"].shape[1]
 
+    out_shape = 2 * 16 if config["model"]["loss"] == "orient" else MuPoTSJoints.NUM_JOINTS * 3
     m = TemporalModel(
         num_in_features,
-        MuPoTSJoints.NUM_JOINTS,
+        out_shape,
         config["model"]["filter_widths"],
         dropout=config["model"]["dropout"],
         channels=config["model"]["channels"],

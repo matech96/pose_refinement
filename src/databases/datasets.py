@@ -156,6 +156,7 @@ class FlippableDataset(PoseDataset):
         sample['bone_orientation'] = bone_orientation
         sample['bone_length'] = bone_length
         sample["root"] = nd[:, 14, :]
+        sample['org_pose3d'] = sample['pose3d'].copy()
 
         if self.transform:
             sample = self.transform(sample)

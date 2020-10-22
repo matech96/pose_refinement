@@ -6,6 +6,7 @@ from training.loaders import UnchunkedGenerator
 from training.torch_tools import eval_results
 from training.losses import orientation_loss
 from util.pose import remove_root, mrpe, optimal_scaling, r_mpjpe
+from util.geom import orient2pose
 
 
 class BaseCallback(object):
@@ -243,11 +244,13 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         if loss == "orient":
             self.bl = {}
             self.root = {}
+            self.org_pose3d = {}
             for seq in self.seqs:
                 inds = np.where(dataset.index.seq == seq)[0]
                 batch = dataset.get_samples(inds, False)
                 self.bl[seq] = batch["bone_length"][batch["valid_pose"]]
                 self.root[seq] = batch["root"][batch["valid_pose"]]
+                self.org_pose3d[seq] = batch["org_pose3d"][batch["valid_pose"]]
 
         if loss == "l1" or loss == "l1_nan":
             self.loss = lambda p, t: np.abs(p - t)
@@ -256,7 +259,8 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         ):  # TODO calculate the real loss for smooth options
             self.loss = lambda p, t: np.square(p - t)
         elif loss == "orient":
-            self.loss = orientation_loss
+            self.is_orient = True
+            self.loss = lambda p, t: np.square(p - t)
 
         super().__init__(
             data_3d_mm,
@@ -280,39 +284,46 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
                 seq = self.seqs[i]
                 pred3d = (
                     self.model(torch.from_numpy(pose2d).cuda()).detach().cpu().numpy()
-                )  # TODO remove removal
+                )
                 self.raw_preds[seq] = pred3d.copy()  # .cpu().numpy()
 
                 valid = valid[0]
-                if self.loss == orientation_loss:
-                    losses[seq] = (
-                        self.loss(
-                            torch.from_numpy(pred3d[0][valid].reshape([-1, 2, 16])).to("cuda"),
-                            torch.from_numpy(self.preprocessed3d[seq]).to("cuda"),
+                if (self.is_orient is not None) and (self.is_orient is True):
+                    orient_pred3d = (
+                        orient2pose(
+                            torch.from_numpy(pred3d[0][valid].reshape([-1, 2, 16])).to(
+                                "cuda"
+                            ),
                             torch.from_numpy(self.bl[seq]).to("cuda"),
                             torch.from_numpy(self.root[seq]).to("cuda"),
                         )
                         .cpu()
                         .numpy()
                     )
+                    losses[seq] = self.loss(
+                        orient_pred3d, self.org_pose3d[seq],
+                    )
                 else:
                     losses[seq] = self.loss(
                         pred3d[0][valid], self.preprocessed3d[seq]
                     )  # .cpu().numpy()
 
-                pred_real_pose = self.post_process3d(
-                    pred3d[0], seq
-                )  # unnormalized output
+                if (self.is_orient is not None) and (self.is_orient is True):
+                    preds[seq] = orient_pred3d
+                else:
+                    pred_real_pose = self.post_process3d(
+                        pred3d[0], seq
+                    )  # unnormalized output
 
-                if self.augment:
-                    pred_real_pose_aug = self.post_process3d(pred3d[1], seq)
-                    pred_real_pose_aug[:, :, 0] *= -1
-                    pred_real_pose_aug = self.dataset.pose3d_jointset.flip(
-                        pred_real_pose_aug
-                    )
-                    pred_real_pose = (pred_real_pose + pred_real_pose_aug) / 2
+                    if self.augment:
+                        pred_real_pose_aug = self.post_process3d(pred3d[1], seq)
+                        pred_real_pose_aug[:, :, 0] *= -1
+                        pred_real_pose_aug = self.dataset.pose3d_jointset.flip(
+                            pred_real_pose_aug
+                        )
+                        pred_real_pose = (pred_real_pose + pred_real_pose_aug) / 2
 
-                preds[seq] = pred_real_pose[valid]
+                    preds[seq] = pred_real_pose[valid]
 
         return losses, preds
 
