@@ -4,11 +4,11 @@ import torch
 
 from training.loaders import UnchunkedGenerator
 from training.torch_tools import eval_results
+from training.losses import orientation_loss
 from util.pose import remove_root, mrpe, optimal_scaling, r_mpjpe
 
 
 class BaseCallback(object):
-
     def on_itergroup_end(self, iter_cnt, epoch_loss):
         pass
 
@@ -25,9 +25,12 @@ class BaseMPJPECalculator(BaseCallback):
     """
     Base class for calculating and displaying MPJPE stats, grouped by something (sequence most of the time).
     """
+
     PCK_THRESHOLD = 150
 
-    def __init__(self, data_3d_mm, joint_set, post_process3d=None, csv=None, prefix='val'):
+    def __init__(
+        self, data_3d_mm, joint_set, post_process3d=None, csv=None, prefix="val"
+    ):
         """
 
         :param data_3d_mm: dict, group_name-> ndarray(n.Poses, nJoints, 3). The ground truth poses in mm.
@@ -37,40 +40,57 @@ class BaseMPJPECalculator(BaseCallback):
         self.pctiles = [5, 10, 50, 90, 95, 99]
 
         if self.csv is not None:
-            with open(csv, 'w') as f:
-                f.write('epoch,type,name,avg')
-                f.write(''.join([',pct' + str(x) for x in self.pctiles]))
-                f.write('\n')
+            with open(csv, "w") as f:
+                f.write("epoch,type,name,avg")
+                f.write("".join([",pct" + str(x) for x in self.pctiles]))
+                f.write("\n")
 
         self.data_3d_mm = data_3d_mm
 
-        self.is_absolute = _sample_value(self.data_3d_mm).shape[1] == joint_set.NUM_JOINTS
-        self.num_joints = joint_set.NUM_JOINTS if self.is_absolute else joint_set.NUM_JOINTS - 1
+        self.is_absolute = (
+            _sample_value(self.data_3d_mm).shape[1] == joint_set.NUM_JOINTS
+        )
+        self.num_joints = (
+            joint_set.NUM_JOINTS if self.is_absolute else joint_set.NUM_JOINTS - 1
+        )
 
         self.joint_set = joint_set
         self.post_process3d = post_process3d
         self.sequences = sorted(list(data_3d_mm.keys()))
 
     def on_epoch_end(self, model, epoch, epoch_loss, optimizer, epoch_vals):
-        sequence_mpjpes, sequence_pcks, sequence_pctiles, joint_means, joint_pctiles = self.eval(model, verbose=True)
+        (
+            sequence_mpjpes,
+            sequence_pcks,
+            sequence_pctiles,
+            joint_means,
+            joint_pctiles,
+        ) = self.eval(model, verbose=True)
 
         if self.csv is not None:
             joint_names = self.joint_set.NAMES.copy()
             if not self.is_absolute:
-                joint_names = np.delete(joint_names, self.joint_set.index_of('hip'))  # remove root
+                joint_names = np.delete(
+                    joint_names, self.joint_set.index_of("hip")
+                )  # remove root
 
-            with open(self.csv, 'a') as f:
+            with open(self.csv, "a") as f:
                 for seq in self.sequences:
-                    f.write('%d,%s,%s,%f' % (epoch, 'sequence', seq, sequence_mpjpes[seq]))
+                    f.write(
+                        "%d,%s,%s,%f" % (epoch, "sequence", seq, sequence_mpjpes[seq])
+                    )
                     for i in range(len(self.pctiles)):
-                        f.write(',%f' % sequence_pctiles[seq][i])
-                    f.write('\n')
+                        f.write(",%f" % sequence_pctiles[seq][i])
+                    f.write("\n")
 
                 for joint_id in range(self.num_joints):
-                    f.write('%d,%s,%s,%f' % (epoch, 'joint', joint_names[joint_id], joint_means[joint_id]))
+                    f.write(
+                        "%d,%s,%s,%f"
+                        % (epoch, "joint", joint_names[joint_id], joint_means[joint_id])
+                    )
                     for i in range(len(self.pctiles)):
-                        f.write(',%f' % joint_pctiles[i, joint_id])
-                    f.write('\n')
+                        f.write(",%f" % joint_pctiles[i, joint_id])
+                    f.write("\n")
 
     def eval(self, model=None, calculate_scale_free=False, verbose=False):
         """
@@ -78,10 +98,10 @@ class BaseMPJPECalculator(BaseCallback):
         :param calculate_scale_free: if True, also calculates N-MRPE and N_RMPJPE
         :return:
         """
-        losses, preds = self.pred_and_calc_loss(model)        
+        losses, preds = self.pred_and_calc_loss(model)
         losses = np.concatenate([losses[seq] for seq in self.sequences])
         self.val_loss = np.nanmean(losses)
-        self.losses_to_log = {self.prefix + '_loss': self.val_loss}
+        self.losses_to_log = {self.prefix + "_loss": self.val_loss}
 
         self.losses = losses
         self.preds = preds
@@ -89,36 +109,60 @@ class BaseMPJPECalculator(BaseCallback):
 
         # Assuming hip is the last component
         if self.is_absolute:
-            self.losses_to_log[self.prefix + '_abs_loss'] = np.nanmean(losses[:, -3:])
-            self.losses_to_log[self.prefix + '_rel_loss'] = np.nanmean(losses[:, :-3])
+            self.losses_to_log[self.prefix + "_abs_loss"] = np.nanmean(losses[:, -3:])
+            self.losses_to_log[self.prefix + "_rel_loss"] = np.nanmean(losses[:, :-3])
         else:
-            self.losses_to_log[self.prefix + '_rel_loss'] = self.val_loss
+            self.losses_to_log[self.prefix + "_rel_loss"] = self.val_loss
 
-        assert self.pctiles[-1] == 99, "Currently the last percentile is hardcoded to be 99 for printing"
+        assert (
+            self.pctiles[-1] == 99
+        ), "Currently the last percentile is hardcoded to be 99 for printing"
 
-        sequence_mpjpes, sequence_pcks, sequence_pctiles, joint_means, joint_pctiles = \
-            eval_results(preds, self.data_3d_mm, self.joint_set, pctiles=self.pctiles, verbose=verbose)
-        self.losses_to_log[self.prefix + '_mrpe'] = np.mean([mrpe(preds[s], self.data_3d_mm[s], self.joint_set)
-                                                             for s in preds])
+        (
+            sequence_mpjpes,
+            sequence_pcks,
+            sequence_pctiles,
+            joint_means,
+            joint_pctiles,
+        ) = eval_results(
+            preds,
+            self.data_3d_mm,
+            self.joint_set,
+            pctiles=self.pctiles,
+            verbose=verbose,
+        )
+        self.losses_to_log[self.prefix + "_mrpe"] = np.mean(
+            [mrpe(preds[s], self.data_3d_mm[s], self.joint_set) for s in preds]
+        )
 
         # Calculate relative error
         if self.is_absolute:
             rel_pred = {}
             rel_gt = {}
             for seq in preds:
-                rel_pred[seq] = remove_root(preds[seq], self.joint_set.index_of('hip'))
-                rel_gt[seq] = remove_root(self.data_3d_mm[seq], self.joint_set.index_of('hip'))
-            rel_mean_error, _, _, _, _ = eval_results(rel_pred, rel_gt, self.joint_set, verbose=False)
-            rel_mean_error = np.mean(np.asarray(list(rel_mean_error.values()), dtype=np.float32))
+                rel_pred[seq] = remove_root(preds[seq], self.joint_set.index_of("hip"))
+                rel_gt[seq] = remove_root(
+                    self.data_3d_mm[seq], self.joint_set.index_of("hip")
+                )
+            rel_mean_error, _, _, _, _ = eval_results(
+                rel_pred, rel_gt, self.joint_set, verbose=False
+            )
+            rel_mean_error = np.mean(
+                np.asarray(list(rel_mean_error.values()), dtype=np.float32)
+            )
             if verbose:
                 print("Root relative error (MPJPE): %.2f" % rel_mean_error)
             self.rel_mean_error = rel_mean_error
-            self.losses_to_log[self.prefix + '_rel_error'] = rel_mean_error
+            self.losses_to_log[self.prefix + "_rel_error"] = rel_mean_error
 
-        self.mean_sequence_mpjpe = np.mean(np.asarray(list(sequence_mpjpes.values()), dtype=np.float32))
-        self.mean_sequence_pck = np.mean(np.asarray(list(sequence_pcks.values()), dtype=np.float32))
-        self.losses_to_log[self.prefix + '_err'] = self.mean_sequence_mpjpe
-        self.losses_to_log[self.prefix + '_pck'] = self.mean_sequence_pck
+        self.mean_sequence_mpjpe = np.mean(
+            np.asarray(list(sequence_mpjpes.values()), dtype=np.float32)
+        )
+        self.mean_sequence_pck = np.mean(
+            np.asarray(list(sequence_pcks.values()), dtype=np.float32)
+        )
+        self.losses_to_log[self.prefix + "_err"] = self.mean_sequence_mpjpe
+        self.losses_to_log[self.prefix + "_pck"] = self.mean_sequence_pck
 
         if calculate_scale_free:
             scaled_preds = {}
@@ -130,16 +174,32 @@ class BaseMPJPECalculator(BaseCallback):
                 s = optimal_scaling(pred_points, gt_points)
                 scaled_preds[seq] = preds[seq] * s
 
-            n_mrpe = np.mean([mrpe(scaled_preds[s], self.data_3d_mm[s], self.joint_set) for s in scaled_preds])
-            n_rmpjpe = np.mean([r_mpjpe(scaled_preds[s], self.data_3d_mm[s], self.joint_set) for s in scaled_preds])
+            n_mrpe = np.mean(
+                [
+                    mrpe(scaled_preds[s], self.data_3d_mm[s], self.joint_set)
+                    for s in scaled_preds
+                ]
+            )
+            n_rmpjpe = np.mean(
+                [
+                    r_mpjpe(scaled_preds[s], self.data_3d_mm[s], self.joint_set)
+                    for s in scaled_preds
+                ]
+            )
 
             if verbose:
-                print('N-MRPE: %.1f' % n_mrpe)
-                print('N-MPJPE: %.1f' % n_rmpjpe)
-            self.losses_to_log[self.prefix + '_n_mrpe'] = n_mrpe
-            self.losses_to_log[self.prefix + '_n_rel_err'] = n_rmpjpe
+                print("N-MRPE: %.1f" % n_mrpe)
+                print("N-MPJPE: %.1f" % n_rmpjpe)
+            self.losses_to_log[self.prefix + "_n_mrpe"] = n_mrpe
+            self.losses_to_log[self.prefix + "_n_rel_err"] = n_rmpjpe
 
-        return sequence_mpjpes, sequence_pcks, sequence_pctiles, joint_means, joint_pctiles
+        return (
+            sequence_mpjpes,
+            sequence_pcks,
+            sequence_pctiles,
+            joint_means,
+            joint_pctiles,
+        )
 
     def results_and_gt(self):
         """
@@ -162,7 +222,9 @@ class BaseMPJPECalculator(BaseCallback):
 class TemporalTestEvaluator(BaseMPJPECalculator):
     """ Can be used with MPII-3DHP dataset to create"""
 
-    def __init__(self, model, dataset, loss, augment, post_process3d=None, prefix='test'):
+    def __init__(
+        self, model, dataset, loss, augment, post_process3d=None, prefix="test"
+    ):
         self.model = model
         self.dataset = dataset
         self.augment = augment
@@ -175,15 +237,34 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         for seq in self.seqs:
             inds = np.where(dataset.index.seq == seq)[0]
             batch = dataset.get_samples(inds, False)
-            self.preprocessed3d[seq] = batch['pose3d'][batch['valid_pose']]
-            data_3d_mm[seq] = dataset.poses3d[inds][batch['valid_pose']]
+            self.preprocessed3d[seq] = batch["pose3d"][batch["valid_pose"]]
+            data_3d_mm[seq] = dataset.poses3d[inds][batch["valid_pose"]]
 
-        if loss == 'l1' or loss == 'l1_nan':
+        if loss == "orient":
+            self.bl = {}
+            self.root = {}
+            for seq in self.seqs:
+                inds = np.where(dataset.index.seq == seq)[0]
+                batch = dataset.get_samples(inds, False)
+                self.bl[seq] = batch["bone_length"][batch["valid_pose"]]
+                self.root[seq] = batch["root"][batch["valid_pose"]]
+
+        if loss == "l1" or loss == "l1_nan":
             self.loss = lambda p, t: np.abs(p - t)
-        elif loss == 'l2' or loss == 'smooth' or loss == 'orient':  # TODO calculate the real loss for smooth and orient options
+        elif (
+            loss == "l2" or loss == "smooth"
+        ):  # TODO calculate the real loss for smooth options
             self.loss = lambda p, t: np.square(p - t)
+        elif loss == "orient":
+            self.loss = orientation_loss
 
-        super().__init__(data_3d_mm, dataset.pose3d_jointset, post_process3d=post_process3d, csv=None, prefix=prefix)
+        super().__init__(
+            data_3d_mm,
+            dataset.pose3d_jointset,
+            post_process3d=post_process3d,
+            csv=None,
+            prefix=prefix,
+        )
 
     def pred_and_calc_loss(self, model):
         """
@@ -197,18 +278,38 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         with torch.no_grad():
             for i, (pose2d, valid) in enumerate(self.generator):
                 seq = self.seqs[i]
-                pred3d = self.model(torch.from_numpy(pose2d).cuda()).detach().cpu().numpy() # TODO remove removal
-                self.raw_preds[seq] = pred3d.copy()#.cpu().numpy()
+                pred3d = (
+                    self.model(torch.from_numpy(pose2d).cuda()).detach().cpu().numpy()
+                )  # TODO remove removal
+                self.raw_preds[seq] = pred3d.copy()  # .cpu().numpy()
 
                 valid = valid[0]
-                losses[seq] = self.loss(pred3d[0][valid], self.preprocessed3d[seq]) # .cpu().numpy()
+                if self.loss == orientation_loss:
+                    losses[seq] = (
+                        self.loss(
+                            torch.from_numpy(pred3d[0][valid].reshape([-1, 2, 16])).to("cuda"),
+                            torch.from_numpy(self.preprocessed3d[seq]).to("cuda"),
+                            torch.from_numpy(self.bl[seq]).to("cuda"),
+                            torch.from_numpy(self.root[seq]).to("cuda"),
+                        )
+                        .cpu()
+                        .numpy()
+                    )
+                else:
+                    losses[seq] = self.loss(
+                        pred3d[0][valid], self.preprocessed3d[seq]
+                    )  # .cpu().numpy()
 
-                pred_real_pose = self.post_process3d(pred3d[0], seq)  # unnormalized output
+                pred_real_pose = self.post_process3d(
+                    pred3d[0], seq
+                )  # unnormalized output
 
                 if self.augment:
                     pred_real_pose_aug = self.post_process3d(pred3d[1], seq)
                     pred_real_pose_aug[:, :, 0] *= -1
-                    pred_real_pose_aug = self.dataset.pose3d_jointset.flip(pred_real_pose_aug)
+                    pred_real_pose_aug = self.dataset.pose3d_jointset.flip(
+                        pred_real_pose_aug
+                    )
                     pred_real_pose = (pred_real_pose + pred_real_pose_aug) / 2
 
                 preds[seq] = pred_real_pose[valid]
@@ -219,8 +320,12 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
 class TemporalMupotsEvaluator(TemporalTestEvaluator):
     """ Can be used with PersonStackedMupots dataset for a temporal model.  """
 
-    def __init__(self, model, dataset, loss, augment, post_process3d=None, prefix='test'):
-        super().__init__(model, dataset, loss, augment, post_process3d=post_process3d, prefix=prefix)
+    def __init__(
+        self, model, dataset, loss, augment, post_process3d=None, prefix="test"
+    ):
+        super().__init__(
+            model, dataset, loss, augment, post_process3d=post_process3d, prefix=prefix
+        )
 
         self.data_3d_mm = TemporalMupotsEvaluator._group_by_seq(self.data_3d_mm)
         self.sequences = sorted(self.data_3d_mm.keys())
@@ -230,7 +335,7 @@ class TemporalMupotsEvaluator(TemporalTestEvaluator):
         per_person_keys = sorted(data.keys())
         result = {}
         for seq in range(1, 21):
-            keys = sorted([k for k in per_person_keys if k.startswith('%d/' % seq)])
+            keys = sorted([k for k in per_person_keys if k.startswith("%d/" % seq)])
             assert len(keys) > 0, per_person_keys
             if type(data[keys[0]]) == torch.Tensor:
                 result[seq] = torch.cat([data[k] for k in keys])
@@ -274,7 +379,7 @@ def preds_from_logger(dataset, logger):
         seqs = np.unique(dataset.index.seq)
         for seq in seqs:
             inds = dataset.index.seq == seq
-            mask = np.zeros(result.shape[:2], dtype='bool')
+            mask = np.zeros(result.shape[:2], dtype="bool")
             assert np.all(~mask)
             mask[inds] = dataset.good_poses[inds]  # composing masks
             result[mask] = logger.preds[seq]
@@ -288,7 +393,7 @@ def preds_from_logger(dataset, logger):
         seqs = np.unique(dataset.index.seq)
         for seq in seqs:
             inds = dataset.index.seq == seq
-            mask = np.zeros(len(result), dtype='bool')
+            mask = np.zeros(len(result), dtype="bool")
             mask[inds] = dataset.good_poses[inds]  # composing masks
             result[mask] = logger.preds[seq]
 
@@ -308,7 +413,7 @@ class ModelSaver(BaseCallback):
 
     def on_epoch_end(self, model, epoch, epoch_loss, optimizer, epoch_vals):
         path = self.path
-        if '%d' in path:
+        if "%d" in path:
             path = path % epoch
 
         torch.save(model.state_dict(), path)
@@ -329,7 +434,7 @@ class BestModelSaver(BaseCallback):
 
     def on_epoch_end(self, model, epoch, epoch_loss, optimizer, epoch_vals):
         path = self.path
-        if '%d' in path:
+        if "%d" in path:
             path = path % epoch
 
         if self.evaluator.losses_to_log[self.metric] < self.best_value:

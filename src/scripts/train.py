@@ -19,8 +19,8 @@ from training.callbacks import preds_from_logger, ModelCopyTemporalEvaluator
 from training.loaders import ChunkedGenerator
 from training.preprocess import *
 from training.torch_tools import torch_train
+from training.losses import orientation_loss
 from util.misc import save, ensuredir
-from util.geom import th_sp2cart
 import copy
 from collections import Iterable
 
@@ -99,21 +99,7 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "orient":
-        joint_set = MuPoTSJoints()
-        connected_joints = joint_set.LIMBGRAPH
-        cj = np.array(connected_joints)
-        cj_index = [2, 1, 0, 5, 4, 3, 9, 8, 12, 11, 10, 15, 14, 13, 7, 6]
-        ordered_cj = cj[cj_index, :]
-
-        pred_bo = pred_3d.reshape(bo.shape)
-        pred_bx, pred_by, pred_bz = th_sp2cart(bl, pred_bo[:, 0, :], pred_bo[:, 1, :])
-        pred_bxyz = torch.stack((pred_bx, pred_by, pred_bz), dim=-1)
-        res = torch.zeros((pred_3d.shape[0], 17, 3)).to("cuda")
-        res[:, 14, :] = root
-        for (a, b), i in zip(ordered_cj, cj_index):
-            res[:, a, :] = res[:, b, :] + pred_bxyz[:, i, :]
-        res = res.reshape([pred_3d.shape[0], 1, -1])
-        loss_3d = torch.nn.functional.l1_loss(res, gt_3d)
+        loss_3d = orientation_loss(pred_3d.reshape(bo.shape), gt_3d, bl, root)
     elif loss_type == "smooth":
         # _conf_l2_cap = 1
         _conf_large_step = 20
