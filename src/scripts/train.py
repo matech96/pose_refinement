@@ -303,14 +303,12 @@ if __name__ == "__main__":
 
     layernorm = "batchnorm"
     ordered_batch = False
-
-    data = "mpii_train"
     
-    # exp = Experiment(
-    #     workspace="pose-refinement",
-    #     project_name="09-fixed-baseline",
-    # )
-    exp = Empty()
+    exp = Experiment(
+        workspace="pose-refinement",
+        project_name="09-fixed-baseline",
+    )
+    # exp = Empty()
 
     if args.output is None:
         output_path = f"../models/{exp.get_key()}"
@@ -338,7 +336,7 @@ if __name__ == "__main__":
         },
         # dataset
         'ignore_invisible': True,
-        "train_data": data,
+        "train_data": "mpii+muco",
         "pose2d_type": "hrnet",
         "pose3d_scaling": "normal",
         "megadepth_type": "megadepth_at_hrnet",
@@ -346,7 +344,7 @@ if __name__ == "__main__":
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
-            "loss": "orient", #"l1",
+            "loss": "l1",
             "channels": 1024,
             "dropout": 0.25,
             "filter_widths": [3, 3, 3, 3],
