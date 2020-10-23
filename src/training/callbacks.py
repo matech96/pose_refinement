@@ -259,8 +259,8 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         ):  # TODO calculate the real loss for smooth options
             self.loss = lambda p, t: np.square(p - t)
         elif loss == "orient":
-            self.is_orient = True
             self.loss = lambda p, t: np.square(p - t)
+        self.is_orient = loss == "orient"
 
         super().__init__(
             data_3d_mm,
