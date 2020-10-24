@@ -351,7 +351,7 @@ if __name__ == "__main__":
             "layernorm": layernorm,  # False,
         },
     }
-    for lr in range(1e-3, 1e-4, 1e-5):
+    for lr in [1e-3, 1e-4, 1e-5]:
         params["learning_rate"] = lr
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
