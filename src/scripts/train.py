@@ -316,7 +316,7 @@ if __name__ == "__main__":
         output_path = args.output
 
     params = {
-        "num_epochs": 80,
+        "num_epochs": 15,
         "preprocess_2d": "DepthposeNormalize2D",
         "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
         "shuffle": True,
@@ -345,9 +345,9 @@ if __name__ == "__main__":
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
             "loss": "l1",
-            "channels": 1024,
+            "channels": 512,
             "dropout": 0.25,
-            "filter_widths": [3, 3, 3, 3],
+            "filter_widths": [3, 3, 3],
             "layernorm": layernorm,  # False,
         },
     }
