@@ -336,7 +336,7 @@ if __name__ == "__main__":
         },
         # dataset
         'ignore_invisible': True,
-        "train_data": "mpii+muco",
+        "train_data": "mpii_train", # +muco
         "pose2d_type": "hrnet",
         "pose3d_scaling": "normal",
         "megadepth_type": "megadepth_at_hrnet",
@@ -344,13 +344,15 @@ if __name__ == "__main__":
         "stride": 2,
         "simple_aug": True,  # augments data by duplicating each frame
         "model": {
-            "loss": "l1",
+            "loss": "orient",
             "channels": 512,
             "dropout": 0.25,
             "filter_widths": [3, 3, 3],
             "layernorm": layernorm,  # False,
         },
     }
-    run_experiment(output_path, params, exp)
-    eval.main(output_path, False, exp)
-    eval.main(output_path, True, exp)
+    for lr in range(1e-3, 1e-4, 1e-5):
+        params["learning_rate"] = lr
+        run_experiment(output_path, params, exp)
+        eval.main(output_path, False, exp)
+        eval.main(output_path, True, exp)

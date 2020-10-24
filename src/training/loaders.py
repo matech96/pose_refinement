@@ -221,7 +221,7 @@ class ChunkedGenerator:
             wrapper_dataset,
             sampler=SequentialSampler(wrapper_dataset),
             batch_size=SUB_BATCH,
-            num_workers=0, # TODO 4
+            num_workers=4
         )
 
         for chunk_pose2d, chunk_pose3d, chunk_valid, chunk_length, chunk_orientation, chunk_root in loader:
