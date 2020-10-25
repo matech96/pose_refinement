@@ -99,7 +99,12 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "orient":
-        loss_3d = orientation_loss(pred_3d.reshape(bo.shape), org_pose3d, bl, root)
+        orient_loss = config["model"]["orient_loss"]
+        pred_bo = pred_3d.reshape(bo.shape)
+        if orient_loss == "proj":
+            loss_3d = orientation_loss(pred_bo, org_pose3d, bl, root)
+        elif orient_loss == "l1":
+            loss_3d = torch.nn.functional.l1_loss(pred_bo, bo)
     elif loss_type == "smooth":
         # _conf_l2_cap = 1
         _conf_large_step = 20
@@ -346,6 +351,7 @@ if __name__ == "__main__":
             "simple_aug": True,  # augments data by duplicating each frame
             "model": {
                 "loss": "orient",
+                "orient_loss": "l1",
                 "channels": 512,
                 "dropout": 0.25,
                 "filter_widths": [3, 3, 3],
