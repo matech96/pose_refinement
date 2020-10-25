@@ -351,7 +351,7 @@ if __name__ == "__main__":
             "simple_aug": True,  # augments data by duplicating each frame
             "model": {
                 "loss": "orient",
-                "orient_loss": "l1",
+                "orient_loss": "proj",
                 "channels": 512,
                 "dropout": 0.25,
                 "filter_widths": [3, 3, 3],
