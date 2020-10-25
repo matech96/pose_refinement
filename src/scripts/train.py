@@ -74,21 +74,21 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         gt_3d = gt_3d.to("cuda")
     elif loss_type == "orient":
         pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
-        gt_3d = batch["pose3d"]  # [1024, 1, 51]
+        org_pose3d = batch["org_pose3d"]
         bl = batch["length"]  # [1024, 16]
         bo = batch["orientation"]  # [1024, 2, 16]
         root = batch["root"]  # [1024, 3]
         if config['ignore_invisible']:
             pose2d = pose2d[batch['valid_pose']]
-            gt_3d = gt_3d[batch['valid_pose']]
+            org_pose3d = org_pose3d[batch['valid_pose']]
             bl = bl[batch['valid_pose']]
             bo = bo[batch['valid_pose']]
             root = root[batch['valid_pose']]
         pose2d = pose2d.to("cuda")
-        gt_3d = gt_3d.to("cuda")
         bl = bl.to("cuda")
         bo = bo.to("cuda")
         root = root.to("cuda")
+        org_pose3d = org_pose3d.to("cuda")
 
     # forward pass
     pred_3d = model(pose2d)  # [1024, 1, 51]
@@ -99,7 +99,7 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif loss_type == "l1_nan":
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "orient":
-        loss_3d = orientation_loss(pred_3d.reshape(bo.shape), gt_3d, bl, root)
+        loss_3d = orientation_loss(pred_3d.reshape(bo.shape), org_pose3d, bl, root)
     elif loss_type == "smooth":
         # _conf_l2_cap = 1
         _conf_large_step = 20
@@ -304,54 +304,54 @@ if __name__ == "__main__":
     layernorm = "batchnorm"
     ordered_batch = False
     
-    exp = Experiment(
-        workspace="pose-refinement",
-        project_name="09-fixed-baseline",
-    )
-    # exp = Empty()
-
-    if args.output is None:
-        output_path = f"../models/{exp.get_key()}"
-    else:
-        output_path = args.output
-
-    params = {
-        "num_epochs": 15,
-        "preprocess_2d": "DepthposeNormalize2D",
-        "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
-        "shuffle": True,
-        "ordered_batch": ordered_batch,
-        # training
-        "optimiser": "adam",
-        "adam_amsgrad": True,
-        "learning_rate": 1e-3,
-        "sgd_momentum": 0,
-        "batch_size": 1024,
-        "train_time_flip": True,
-        "test_time_flip": True,
-        "lr_scheduler": {
-            "type": "multiplicative",
-            "multiplier": 0.95,
-            "step_size": 1,
-        },
-        # dataset
-        'ignore_invisible': True,
-        "train_data": "mpii_train", # +muco
-        "pose2d_type": "hrnet",
-        "pose3d_scaling": "normal",
-        "megadepth_type": "megadepth_at_hrnet",
-        "cap_25fps": True,
-        "stride": 2,
-        "simple_aug": True,  # augments data by duplicating each frame
-        "model": {
-            "loss": "orient",
-            "channels": 512,
-            "dropout": 0.25,
-            "filter_widths": [3, 3, 3],
-            "layernorm": layernorm,  # False,
-        },
-    }
     for lr in [1e-3, 1e-4, 1e-5]:
+        exp = Experiment(
+            workspace="pose-refinement",
+            project_name="09-fixed-baseline",
+        )
+        # exp = Empty()
+
+        if args.output is None:
+            output_path = f"../models/{exp.get_key()}"
+        else:
+            output_path = args.output
+
+        params = {
+            "num_epochs": 15,
+            "preprocess_2d": "DepthposeNormalize2D",
+            "preprocess_3d": "SplitToRelativeAbsAndMeanNormalize3D",
+            "shuffle": True,
+            "ordered_batch": ordered_batch,
+            # training
+            "optimiser": "adam",
+            "adam_amsgrad": True,
+            "learning_rate": 1e-3,
+            "sgd_momentum": 0,
+            "batch_size": 1024,
+            "train_time_flip": True,
+            "test_time_flip": True,
+            "lr_scheduler": {
+                "type": "multiplicative",
+                "multiplier": 0.95,
+                "step_size": 1,
+            },
+            # dataset
+            'ignore_invisible': True,
+            "train_data": "mpii_train", # +muco
+            "pose2d_type": "hrnet",
+            "pose3d_scaling": "normal",
+            "megadepth_type": "megadepth_at_hrnet",
+            "cap_25fps": True,
+            "stride": 2,
+            "simple_aug": True,  # augments data by duplicating each frame
+            "model": {
+                "loss": "orient",
+                "channels": 512,
+                "dropout": 0.25,
+                "filter_widths": [3, 3, 3],
+                "layernorm": layernorm,  # False,
+            },
+        }
         params["learning_rate"] = lr
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
