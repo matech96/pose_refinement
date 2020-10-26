@@ -351,7 +351,7 @@ class TemporalMupotsEvaluator(TemporalTestEvaluator):
     """ Can be used with PersonStackedMupots dataset for a temporal model.  """
 
     def __init__(
-        self, model, dataset, loss, augment, post_process3d=None, prefix="test"
+        self, model, dataset, loss, augment, post_process3d=None, prefix="test", orient_norm=None,
     ):
         super().__init__(
             model, dataset, loss, augment, post_process3d=post_process3d, prefix=prefix
