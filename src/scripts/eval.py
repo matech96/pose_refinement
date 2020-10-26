@@ -146,6 +146,7 @@ def main(model_name, pose_refine, exp: Experiment):
         True,
         post_process3d=post_process_func,
         prefix=prefix,
+        orient_norm=config["orient_norm"]
     )
     # logger = TemporalTestEvaluator(
     #     m,

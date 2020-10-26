@@ -40,7 +40,7 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
         cx = cx.reshape(shape)
         cy = cy.reshape(shape)
 
-    data = data[..., joint_set.TO_COMMON14, :] # (1098610, 19, 3) -> (1098610, 14, 3)
+    data = data[..., joint_set.TO_COMMON14, :]  # (1098610, 19, 3) -> (1098610, 14, 3)
 
     # This is 100ms
     data[..., :, 0] -= cx
@@ -51,7 +51,9 @@ def preprocess_2d(data, fx, cx, fy, cy, joint_set, root_name):
     root_ind = np.where(Common14Joints.NAMES == root_name)[0][0]
     root2d = data[..., root_ind, :].copy()  # negligible
     # 70ms
-    data = remove_root_keepscore(data, root_ind)  # (nPoses, 13, 3), modifies data, (1098610, 13, 3)
+    data = remove_root_keepscore(
+        data, root_ind
+    )  # (nPoses, 13, 3), modifies data, (1098610, 13, 3)
     # print(data.dtype)
 
     # TODO why is this here
@@ -103,7 +105,7 @@ def preprocess_3d(data, add_root, log_root_z, joint_set, root_name):
     if add_root:
         data = np.concatenate([data, root3d], axis=-1)  # (nFrames, [nPoses], nJoints*3)
 
-    return data.astype('float32')
+    return data.astype("float32")
 
 
 class RemoveIndex(object):
@@ -112,7 +114,7 @@ class RemoveIndex(object):
     """
 
     def __call__(self, sample):
-        sample.pop('index', None)
+        sample.pop("index", None)
         return sample
 
     @staticmethod
@@ -124,7 +126,10 @@ class ToTensor(object):
     """ Converts ndarrays in sample to pytorch tensors. Expects dicts as inputs. """
 
     def __call__(self, sample):
-        return {k: torch.from_numpy(v) if isinstance(v, np.ndarray) else torch.tensor(v) for k, v in sample.items()}
+        return {
+            k: torch.from_numpy(v) if isinstance(v, np.ndarray) else torch.tensor(v)
+            for k, v in sample.items()
+        }
 
 
 class Identity(object):
@@ -175,13 +180,13 @@ class BaseNormalizer(object):
         Path is a pkl file that contains mean and std.
         """
         instance = cls(None)
-        instance.mean = state['mean']
-        instance.std = state['std']
+        instance.mean = state["mean"]
+        instance.std = state["std"]
 
         return instance
 
     def state_dict(self):
-        return {'mean': self.mean, 'std': self.std, 'field_name': self.field_name}
+        return {"mean": self.mean, "std": self.std, "field_name": self.field_name}
 
     def __call__(self, sample):
         sample[self.field_name] = (sample[self.field_name] - self.mean) / self.std
@@ -206,7 +211,7 @@ class MeanNormalize2D(BaseNormalizer):
         Parameters:
             dataset:  either a numpy array containing the 3D poses or a PanopticSinglePersonDataset
         """
-        self.field_name = 'pose2d'
+        self.field_name = "pose2d"
         if dataset is None:
             # mean and std must be set manually later
             return
@@ -214,8 +219,10 @@ class MeanNormalize2D(BaseNormalizer):
         if not isinstance(dataset, np.ndarray):
             dataset = dataset.poses2d
 
-        assert isinstance(dataset, np.ndarray), "Expected dataset to be either a PanopticSinglePersonDataset or a numpy array, got:" + str(
-            type(dataset))
+        assert isinstance(dataset, np.ndarray), (
+            "Expected dataset to be either a PanopticSinglePersonDataset or a numpy array, got:"
+            + str(type(dataset))
+        )
 
         # data = dataset.reshape((len(dataset), -1))
         # data = dataset.reshape((-1, dataset.shape[-1]))
@@ -233,7 +240,7 @@ class MeanNormalize3D(BaseNormalizer):
         Parameters:
             dataset:  either a numpy array containing the 3D poses or a PanopticSinglePersonDataset
         """
-        self.field_name = 'pose3d'
+        self.field_name = "pose3d"
         if dataset is None:
             # mean and std must be set manually later
             return
@@ -241,11 +248,20 @@ class MeanNormalize3D(BaseNormalizer):
         if isinstance(dataset, PoseDataset):
             dataset = dataset.poses3d
 
-        assert isinstance(dataset, np.ndarray), "Expected dataset to be either a PanopticSinglePersonDataset or a numpy array"
+        assert isinstance(
+            dataset, np.ndarray
+        ), "Expected dataset to be either a PanopticSinglePersonDataset or a numpy array"
 
         # data = dataset.reshape((len(dataset), -1))
         data = dataset
         super().__init__(np.nanmean(data, axis=0), np.nanstd(data, axis=0))
+
+
+class MeanNormalizeOrient(BaseNormalizer):
+    def __init__(self, dataset):
+        super().__init__(dataset)
+        self.field_name = "orientation"
+        super().__init__(np.nanmean(dataset.orientation, axis=0), np.nanstd(dataset.orientation, axis=0))
 
 
 class SplitToRelativeAbsAndMeanNormalize3D(object):
@@ -263,21 +279,28 @@ class SplitToRelativeAbsAndMeanNormalize3D(object):
                       Potenially speed up training.
         """
         if cache or normalizer is None:
-            assert dataset is not None, "dataset must be defined if cache==true or no normalizer provided"
+            assert (
+                dataset is not None
+            ), "dataset must be defined if cache==true or no normalizer provided"
         self.cache = cache
         self.log_root_z = log_root_z
 
         if dataset is not None:
             self.joint_set = dataset.pose3d_jointset
-            preprocessed3d = preprocess_3d(dataset.poses3d, True, log_root_z, self.joint_set, 'hip')
+            preprocessed3d = preprocess_3d(
+                dataset.poses3d, True, log_root_z, self.joint_set, "hip"
+            )
             if normalizer is None:
                 normalizer = MeanNormalize3D(preprocessed3d)
 
             if cache:
-                self.preprocessed3d = (preprocessed3d - normalizer.mean) / normalizer.std
+                self.preprocessed3d = (
+                    preprocessed3d - normalizer.mean
+                ) / normalizer.std
 
-        assert isinstance(normalizer, MeanNormalize3D), \
-            "Unexpected normalizer type: " + str(type(normalizer))
+        assert isinstance(
+            normalizer, MeanNormalize3D
+        ), "Unexpected normalizer type: " + str(type(normalizer))
         self.normalizer = normalizer
 
     @classmethod
@@ -292,16 +315,16 @@ class SplitToRelativeAbsAndMeanNormalize3D(object):
         """
         instance = cls(dataset, MeanNormalize3D.from_state(state), cache=False)
         if dataset is None:
-            set_name = state['joint_set']
+            set_name = state["joint_set"]
             if "<class '" in set_name:  # fixing incorrectly formatted type name
-                set_name = set_name[set_name.rindex('.') + 1:-2]
+                set_name = set_name[set_name.rindex(".") + 1 : -2]
             instance.joint_set = globals()[set_name]()
 
         return instance
 
     def state_dict(self):
         state = self.normalizer.state_dict()
-        state['joint_set'] = type(self.joint_set).__name__
+        state["joint_set"] = type(self.joint_set).__name__
         return state
 
     def __call__(self, sample):
@@ -309,12 +332,14 @@ class SplitToRelativeAbsAndMeanNormalize3D(object):
         # pose3d = sample['pose3d']  # shape is (, nJoints*3)
         # preprocessed = preprocess_3d(pose3d.reshape((self.num_joints, 3)), True, PanopticJoints(), 'hip')
         if self.cache:
-            preprocessed = self.preprocessed3d[sample['index']]
-            sample['pose3d'] = preprocessed
+            preprocessed = self.preprocessed3d[sample["index"]]
+            sample["pose3d"] = preprocessed
         else:
-            pose3d = sample['pose3d']  # shape is ([nPoses],nJoints, 3)
-            preprocessed = preprocess_3d(pose3d, True, self.log_root_z, self.joint_set, 'hip')
-            sample['pose3d'] = preprocessed
+            pose3d = sample["pose3d"]  # shape is ([nPoses],nJoints, 3)
+            preprocessed = preprocess_3d(
+                pose3d, True, self.log_root_z, self.joint_set, "hip"
+            )
+            sample["pose3d"] = preprocessed
             sample = self.normalizer(sample)
         return sample
 
@@ -333,23 +358,35 @@ class DepthposeNormalize2D(object):
                       Potenially speed up training.
         """
         if cache or normalizer is None:
-            assert dataset is not None, "dataset must be defined if cache==true or no normalizer provided"
+            assert (
+                dataset is not None
+            ), "dataset must be defined if cache==true or no normalizer provided"
         self.cache = cache
 
         if dataset is not None:
-            preprocessed2d = preprocess_2d(dataset.poses2d.copy(), dataset.fx, dataset.cx, dataset.fy, dataset.cy,
-                                           dataset.pose2d_jointset, 'hip')
+            preprocessed2d = preprocess_2d(
+                dataset.poses2d.copy(),
+                dataset.fx,
+                dataset.cx,
+                dataset.fy,
+                dataset.cy,
+                dataset.pose2d_jointset,
+                "hip",
+            )
 
             if normalizer is None:
                 normalizer = MeanNormalize2D(preprocessed2d)
 
             if cache:
-                self.preprocessed2d = (preprocessed2d - normalizer.mean) / normalizer.std
+                self.preprocessed2d = (
+                    preprocessed2d - normalizer.mean
+                ) / normalizer.std
 
         self.normalizer = normalizer
         self.dataset = dataset
-        assert isinstance(self.normalizer, MeanNormalize2D), \
-            "Unexpected normalizer type: " + str(type(normalizer))
+        assert isinstance(
+            self.normalizer, MeanNormalize2D
+        ), "Unexpected normalizer type: " + str(type(normalizer))
 
     @classmethod
     def from_file(cls, path, dataset):
@@ -366,27 +403,32 @@ class DepthposeNormalize2D(object):
 
     def __call__(self, sample):
         if self.cache:
-            sample['pose2d'] = self.preprocessed2d[sample['index']]
+            sample["pose2d"] = self.preprocessed2d[sample["index"]]
         else:
-            pose2d = sample['pose2d']  # shape is ([nPoses],nJoints, 3)
+            pose2d = sample["pose2d"]  # shape is ([nPoses],nJoints, 3)
 
-            single_item = sample['pose2d'].ndim == 2
+            single_item = sample["pose2d"].ndim == 2
             if single_item:
                 pose2d = np.expand_dims(pose2d, axis=0)
 
-            ind = sample['index']
-            preprocessed = preprocess_2d(pose2d.copy(), self.dataset.fx[ind], sample['cx'],
-                                         self.dataset.fy[ind], self.dataset.cy[ind],
-                                         self.dataset.pose2d_jointset, 'hip')
+            ind = sample["index"]
+            preprocessed = preprocess_2d(
+                pose2d.copy(),
+                self.dataset.fx[ind],
+                sample["cx"],
+                self.dataset.fy[ind],
+                self.dataset.cy[ind],
+                self.dataset.pose2d_jointset,
+                "hip",
+            )
             if single_item:
                 preprocessed = preprocessed[0]
-            sample['pose2d'] = preprocessed
+            sample["pose2d"] = preprocessed
             sample = self.normalizer(sample)
         return sample
 
 
 class SaveableCompose(object):
-
     def __init__(self, transforms):
         self.transforms = transforms
 
@@ -402,13 +444,13 @@ class SaveableCompose(object):
         """
         transforms = []
         for d in state:
-            if d['name'] == 'function':
-                t = globals()[d['state']['name']]
-            elif d['name'] == 'FuncAndNormalizeWrapper':
-                func = eval(d['state']['func_def'], globals(), locals)
-                t = FuncAndNormalize.from_state(func, d['state'], dataset)
+            if d["name"] == "function":
+                t = globals()[d["state"]["name"]]
+            elif d["name"] == "FuncAndNormalizeWrapper":
+                func = eval(d["state"]["func_def"], globals(), locals)
+                t = FuncAndNormalize.from_state(func, d["state"], dataset)
             else:
-                t = globals()[d['name']].from_state(d['state'], dataset)
+                t = globals()[d["name"]].from_state(d["state"], dataset)
             transforms.append(t)
 
         return SaveableCompose(transforms)
@@ -417,11 +459,11 @@ class SaveableCompose(object):
         state = []
         for t in self.transforms:
             name = type(t).__name__
-            if name == 'function':
-                s = {'name': t.__name__}
+            if name == "function":
+                s = {"name": t.__name__}
             else:
-                s = t.state_dict() if hasattr(t, 'state_dict') else None
-            state.append({'name': name, 'state': s})
+                s = t.state_dict() if hasattr(t, "state_dict") else None
+            state.append({"name": name, "state": s})
 
         return state
 
@@ -441,7 +483,7 @@ def keep_hrnet_c14(data):
     Keeps only COMMON-14 joints from hrnet.
     data - ndarray(..., 19), along the last dimension, each slice corresponds to a joint In CocoEx joint order.
     """
-    assert_shape(data, ('*', None, CocoExJoints.NUM_JOINTS))
+    assert_shape(data, ("*", None, CocoExJoints.NUM_JOINTS))
     data = data[..., CocoExJoints.TO_COMMON14]
 
     return data
@@ -476,12 +518,18 @@ def decode_trfrm(transform_name, locals=None):
 
 
 def get_postprocessor(config, test_set, normalizer3d):
-    if config['preprocess_3d'] == 'SplitToRelativeAbsAndMeanNormalize3D':
+    if config["preprocess_3d"] == "SplitToRelativeAbsAndMeanNormalize3D":
+
         def f(x, seq):
             scale = 1 if isinstance(test_set.pose3d_jointset, MuPoTSJoints) else 1000
-            return scale * combine_pose_and_trans(x, normalizer3d.std, normalizer3d.mean, test_set.pose3d_jointset, "hip")
+            return scale * combine_pose_and_trans(
+                x, normalizer3d.std, normalizer3d.mean, test_set.pose3d_jointset, "hip"
+            )
 
         return f
 
     else:
-        raise NotImplementedError('No unconverter for 3D preprocessing: ' + config['preprocess_3d'])
+        raise NotImplementedError(
+            "No unconverter for 3D preprocessing: " + config["preprocess_3d"]
+        )
+

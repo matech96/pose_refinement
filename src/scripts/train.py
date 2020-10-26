@@ -47,10 +47,10 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
         gt_3d = batch["pose3d"]
-        if config['ignore_invisible']:
-            pose2d = pose2d[batch['valid_pose']]
-            gt_3d = gt_3d[batch['valid_pose']]
-            
+        if config["ignore_invisible"]:
+            pose2d = pose2d[batch["valid_pose"]]
+            gt_3d = gt_3d[batch["valid_pose"]]
+
         if isinstance(pose2d, torch.Tensor):
             inds = torch.all(torch.all(~torch.isnan(pose2d), dim=(-1)), dim=-1)
             pose2d = pose2d[inds]
@@ -67,9 +67,9 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif (loss_type == "l1") or (loss_type == "smooth"):
         pose2d = batch["temporal_pose2d"]  # [1024, 81, 42]
         gt_3d = batch["pose3d"]  # [1024, 1, 51]
-        if config['ignore_invisible']:
-            pose2d = pose2d[batch['valid_pose']]
-            gt_3d = gt_3d[batch['valid_pose']]
+        if config["ignore_invisible"]:
+            pose2d = pose2d[batch["valid_pose"]]
+            gt_3d = gt_3d[batch["valid_pose"]]
         pose2d = pose2d.to("cuda")
         gt_3d = gt_3d.to("cuda")
     elif loss_type == "orient":
@@ -78,12 +78,12 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         bl = batch["length"]  # [1024, 16]
         bo = batch["orientation"]  # [1024, 2, 16]
         root = batch["root"]  # [1024, 3]
-        if config['ignore_invisible']:
-            pose2d = pose2d[batch['valid_pose']]
-            org_pose3d = org_pose3d[batch['valid_pose']]
-            bl = bl[batch['valid_pose']]
-            bo = bo[batch['valid_pose']]
-            root = root[batch['valid_pose']]
+        if config["ignore_invisible"]:
+            pose2d = pose2d[batch["valid_pose"]]
+            org_pose3d = org_pose3d[batch["valid_pose"]]
+            bl = bl[batch["valid_pose"]]
+            bo = bo[batch["valid_pose"]]
+            root = root[batch["valid_pose"]]
         pose2d = pose2d.to("cuda")
         bl = bl.to("cuda")
         bo = bo.to("cuda")
@@ -101,10 +101,21 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
     elif loss_type == "orient":
         orient_loss = config["model"]["orient_loss"]
         pred_bo = pred_3d.reshape(bo.shape)
-        if orient_loss == "proj":
-            loss_3d = orientation_loss(pred_bo, org_pose3d, bl, root)
-        elif orient_loss == "l1":
-            loss_3d = torch.nn.functional.l1_loss(pred_bo, bo)
+        if config["orient_norm"] == "_1_1":
+            if orient_loss == "proj":
+                loss_3d = orientation_loss(pred_bo * np.pi, org_pose3d, bl, root)
+            elif orient_loss == "l1":
+                loss_3d = torch.nn.functional.l1_loss(pred_bo, bo / np.pi)
+        elif config["orient_norm"] == "0_1":
+            if orient_loss == "proj":
+                loss_3d = orientation_loss((pred_bo * 2 * np.pi) - np.pi, org_pose3d, bl, root)
+            elif orient_loss == "l1":
+                loss_3d = torch.nn.functional.l1_loss(pred_bo, (bo + np.pi) / (2 * np.pi))
+       else:
+            if orient_loss == "proj":
+                loss_3d = orientation_loss(pred_bo, org_pose3d, bl, root)
+            elif orient_loss == "l1":
+                loss_3d = torch.nn.functional.l1_loss(pred_bo, bo)
     elif loss_type == "smooth":
         # _conf_l2_cap = 1
         _conf_large_step = 20
@@ -118,19 +129,21 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         org_pred_3d = pred_3d * std_3d
         org_gt_3d = gt_3d * std_3d
 
-
         # e_pred = capped_l2_euc_err(
         #     org_pred_3d, org_gt_3d, torch.tensor(_conf_l2_cap).float().cuda()
         # )
         e_pred = torch.nn.functional.mse_loss(pred_3d, gt_3d)
         e_smooth_small = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, 1)
-        e_smooth_large = step_zero_velocity_loss(org_pred_3d[:, [0], :] / 1000, _conf_large_step)
+        e_smooth_large = step_zero_velocity_loss(
+            org_pred_3d[:, [0], :] / 1000, _conf_large_step
+        )
         if len(e_smooth_large) == 0:
             e_smooth_large = torch.tensor([0.0]).cuda()
 
         loss_3d = (
             torch.mean(v * e_pred)
-            + _conf_alpha_1 * torch.mean((1 - v[-len(e_smooth_large):]) * e_smooth_large)
+            + _conf_alpha_1
+            * torch.mean((1 - v[-len(e_smooth_large) :]) * e_smooth_large)
             + _conf_alpha_2 * torch.mean(e_smooth_small)
         )
         vals = {
@@ -189,11 +202,13 @@ def run_experiment(output_path, _config, exp: Experiment):
     if _config["simple_aug"]:
         train_data.augment(False)
 
+    # normalizer_orient = MeanNormalizeOrient(train_data)
     # Load the preprocessing steps
     train_data.transform = None
     transforms_train = [
         decode_trfrm(_config["preprocess_2d"], globals())(train_data, cache=False),
         decode_trfrm(_config["preprocess_3d"], globals())(train_data, cache=False),
+        # normalizer_orient,
     ]
 
     normalizer2d = transforms_train[0].normalizer
@@ -202,6 +217,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     transforms_test = [
         decode_trfrm(_config["preprocess_2d"], globals())(test_data, normalizer2d),
         decode_trfrm(_config["preprocess_3d"], globals())(test_data, normalizer3d),
+        # normalizer_orient,
     ]
 
     transforms_train.append(RemoveIndex())
@@ -220,8 +236,12 @@ def run_experiment(output_path, _config, exp: Experiment):
     exp.log_parameter("train data length", len_train)
     exp.log_parameter("test data length", len_test)
 
-    bos = train_data[[0]]["bone_orientation"].shape
-    out_shape = bos[1] * bos[2] if _config["model"]["loss"] == "orient" else MuPoTSJoints.NUM_JOINTS * 3
+    bos = train_data[[0]]["orientation"].shape
+    out_shape = (
+        bos[1] * bos[2]
+        if _config["model"]["loss"] == "orient"
+        else MuPoTSJoints.NUM_JOINTS * 3
+    )
     model = TemporalModelOptimized1f(
         train_data[[0]]["pose2d"].shape[-1],
         out_shape,
@@ -260,6 +280,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         _config["test_time_flip"],
         post_process3d=get_postprocessor(_config, test_data, normalizer3d),
         prefix="test",
+        orient_norm=_config["orient_norm"]
     )
 
     torch_train(
@@ -292,6 +313,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         },
     )
 
+
 class Empty:
     def __getattribute__(self, key):
         return empty
@@ -308,12 +330,9 @@ if __name__ == "__main__":
 
     layernorm = "batchnorm"
     ordered_batch = False
-    
-    for lr in [1e-3, 1e-4, 1e-5]:
-        exp = Experiment(
-            workspace="pose-refinement",
-            project_name="09-fixed-baseline",
-        )
+
+    for norm in ["0_1", "_1_1"]:
+        exp = Experiment(workspace="pose-refinement", project_name="09-fixed-baseline",)
         # exp = Empty()
 
         if args.output is None:
@@ -341,8 +360,8 @@ if __name__ == "__main__":
                 "step_size": 1,
             },
             # dataset
-            'ignore_invisible': True,
-            "train_data": "mpii_train", # +muco
+            "ignore_invisible": True,
+            "train_data": "mpii_train",  # +muco
             "pose2d_type": "hrnet",
             "pose3d_scaling": "normal",
             "megadepth_type": "megadepth_at_hrnet",
@@ -357,8 +376,8 @@ if __name__ == "__main__":
                 "filter_widths": [3, 3, 3],
                 "layernorm": layernorm,  # False,
             },
+            "orient_norm": norm
         }
-        params["learning_rate"] = lr
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
         eval.main(output_path, True, exp)

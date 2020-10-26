@@ -204,8 +204,8 @@ class ChunkedGenerator:
                 chunk_valid = chunk["valid_pose"].reshape(
                     chunk_inds.shape + chunk["valid_pose"].shape[1:]
                 )
-                chunk_length = chunk["bone_length"].reshape(chunk_inds.shape + chunk["bone_length"].shape[1:])
-                chunk_orientation = chunk["bone_orientation"].reshape(chunk_inds.shape + chunk["bone_orientation"].shape[1:])
+                chunk_length = chunk["length"].reshape(chunk_inds.shape + chunk["length"].shape[1:])
+                chunk_orientation = chunk["orientation"].reshape(chunk_inds.shape + chunk["orientation"].shape[1:])
                 chunk_root = chunk["root"].reshape(chunk_inds.shape + chunk["root"].shape[1:])
 
                 # for non temporal values select the middle item:

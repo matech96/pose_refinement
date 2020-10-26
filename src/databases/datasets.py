@@ -153,8 +153,8 @@ class FlippableDataset(PoseDataset):
         r, t, p = cs.cart2sp(diff[:, :, 0], diff[:, :, 1], diff[:, :, 2])
         bone_orientation = np.array(list(zip(t, p)))
         bone_length = r
-        sample['bone_orientation'] = bone_orientation
-        sample['bone_length'] = bone_length
+        sample['orientation'] = bone_orientation
+        sample['length'] = bone_length
         sample["root"] = nd[:, 14, :]
         sample['org_pose3d'] = sample['pose3d'].copy()
 

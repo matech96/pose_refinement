@@ -224,7 +224,14 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
     """ Can be used with MPII-3DHP dataset to create"""
 
     def __init__(
-        self, model, dataset, loss, augment, post_process3d=None, prefix="test"
+        self,
+        model,
+        dataset,
+        loss,
+        augment,
+        post_process3d=None,
+        prefix="test",
+        orient_norm=None,
     ):
         self.model = model
         self.dataset = dataset
@@ -243,12 +250,14 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
 
         if loss == "orient":
             self.bl = {}
+            # self.bo = {}  # TODO remove
             self.root = {}
             self.org_pose3d = {}
             for seq in self.seqs:
                 inds = np.where(dataset.index.seq == seq)[0]
                 batch = dataset.get_samples(inds, False)
-                self.bl[seq] = batch["bone_length"][batch["valid_pose"]]
+                self.bl[seq] = batch["length"][batch["valid_pose"]]
+                # self.bo[seq] = batch["orientation"][batch["valid_pose"]]  # TODO remove
                 self.root[seq] = batch["root"][batch["valid_pose"]]
                 self.org_pose3d[seq] = batch["org_pose3d"][batch["valid_pose"]]
 
@@ -261,6 +270,7 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         elif loss == "orient":
             self.loss = lambda p, t: np.square(p - t)
         self.is_orient = loss == "orient"
+        self.orient_norm = orient_norm
 
         super().__init__(
             data_3d_mm,
@@ -289,20 +299,29 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
 
                 valid = valid[0]
                 if (self.is_orient is not None) and (self.is_orient is True):
+                    pred_bo_np = pred3d[0][valid].reshape([-1, 2, 16])
+                    if self.orient_norm is None:
+                        pass
+                    elif self.orient_norm == "_1_1":
+                        pred_bo_np *= np.pi
+                    elif self.orient_norm == "0_1":
+                        pred_bo_np = (pred_bo_np * 2 * np.pi) - np.pi
+                    else:
+                        raise Exception(
+                            f"Not supported oreitation norm: {self.orient_norm}"
+                        )
+                    pred_bo = torch.from_numpy(pred_bo_np).to("cuda")
                     orient_pred3d = (
                         orient2pose(
-                            torch.from_numpy(pred3d[0][valid].reshape([-1, 2, 16])).to(
-                                "cuda"
-                            ),
+                            pred_bo,
+                            # torch.from_numpy(self.bo[seq]).to("cuda"),
                             torch.from_numpy(self.bl[seq]).to("cuda"),
                             torch.from_numpy(self.root[seq]).to("cuda"),
                         )
                         .cpu()
                         .numpy()
                     )
-                    losses[seq] = self.loss(
-                        orient_pred3d, self.org_pose3d[seq],
-                    )
+                    losses[seq] = self.loss(orient_pred3d, self.org_pose3d[seq],)
                 else:
                     losses[seq] = self.loss(
                         pred3d[0][valid], self.preprocessed3d[seq]
