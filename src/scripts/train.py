@@ -108,10 +108,14 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
                 loss_3d = torch.nn.functional.l1_loss(pred_bo, bo / np.pi)
         elif config["orient_norm"] == "0_1":
             if orient_loss == "proj":
-                loss_3d = orientation_loss((pred_bo * 2 * np.pi) - np.pi, org_pose3d, bl, root)
+                loss_3d = orientation_loss(
+                    (pred_bo * 2 * np.pi) - np.pi, org_pose3d, bl, root
+                )
             elif orient_loss == "l1":
-                loss_3d = torch.nn.functional.l1_loss(pred_bo, (bo + np.pi) / (2 * np.pi))
-       else:
+                loss_3d = torch.nn.functional.l1_loss(
+                    pred_bo, (bo + np.pi) / (2 * np.pi)
+                )
+        else:
             if orient_loss == "proj":
                 loss_3d = orientation_loss(pred_bo, org_pose3d, bl, root)
             elif orient_loss == "l1":
@@ -280,7 +284,7 @@ def run_experiment(output_path, _config, exp: Experiment):
         _config["test_time_flip"],
         post_process3d=get_postprocessor(_config, test_data, normalizer3d),
         prefix="test",
-        orient_norm=_config["orient_norm"]
+        orient_norm=_config["orient_norm"],
     )
 
     torch_train(
@@ -376,7 +380,7 @@ if __name__ == "__main__":
                 "filter_widths": [3, 3, 3],
                 "layernorm": layernorm,  # False,
             },
-            "orient_norm": norm
+            "orient_norm": norm,
         }
         run_experiment(output_path, params, exp)
         eval.main(output_path, False, exp)
