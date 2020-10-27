@@ -145,7 +145,7 @@ def main(model_name, pose_refine, exp: Experiment):
         config["model"]["loss"],
         True,
         post_process3d=post_process_func,
-        prefix=prefix,
+        prefix="mupo_NR",
         orient_norm=config["orient_norm"]
     )
     # logger = TemporalTestEvaluator(
@@ -183,7 +183,7 @@ def main(model_name, pose_refine, exp: Experiment):
         refine_config = load("../models/pose_refine_config.json")
         pred = np.concatenate([logger.preds[i] for i in range(1, 21)])
         pred = optimize_poses(pred, test_set, refine_config)
-        l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix="R")
+        l = StackedArrayAllMupotsEvaluator(pred, test_set, True, prefix=prefix)
         l.eval(calculate_scale_free=True, verbose=True)
         exp.log_metrics(l.losses_to_log)
 
