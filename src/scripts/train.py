@@ -336,7 +336,7 @@ if __name__ == "__main__":
     ordered_batch = False
 
     for norm in ["0_1", "_1_1"]:
-        exp = Experiment(workspace="pose-refinement", project_name="09-fixed-baseline",)
+        exp = Experiment(workspace="pose-refinement", project_name="10-orient-norm",)
         # exp = Empty()
 
         if args.output is None:
@@ -353,7 +353,7 @@ if __name__ == "__main__":
             # training
             "optimiser": "adam",
             "adam_amsgrad": True,
-            "learning_rate": 1e-3,
+            "learning_rate": 1e-4,
             "sgd_momentum": 0,
             "batch_size": 1024,
             "train_time_flip": True,
