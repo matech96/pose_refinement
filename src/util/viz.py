@@ -10,7 +10,7 @@ import cv2
 
 # 0-right, 1-left, 2-center
 from databases.joint_sets import MuPoTSJoints
-from nipgutils.misc import assert_shape
+# from nipgutils.misc import assert_shape
 
 
 def get_3d_axes(*subplot):
@@ -128,7 +128,7 @@ def show3Dpose(poses, joint_set, ax=None, lcolor="#d82f2f", rcolor="#e77d3c", cc
     if invert_vertical:
         ax.invert_zaxis()
 
-    ax.set_aspect('equal')
+    # ax.set_aspect('equal')
 
 
 def show2Dpose(pose, joint_set, ax=None, lcolor="#d82f2f", rcolor="#e77d3c", ccolor="#2e78d8", add_labels=False, show_numbers=False,
