@@ -334,10 +334,10 @@ if __name__ == "__main__":
 
     layernorm = "batchnorm"
     ordered_batch = False
-    norm = "0_1"  # "_1_1"
+    norm = "_1_1"  # "_1_1"
 
     for lr in [0.1, 0.01, 0.001, 0.0001]:
-        exp = Experiment(workspace="pose-refinement", project_name=f"11-{norm}-lr",)
+        exp = Experiment(workspace="pose-refinement", project_name=f"12-{norm}-lr",)
         # exp = Empty()
 
         if args.output is None:
