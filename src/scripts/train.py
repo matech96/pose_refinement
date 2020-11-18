@@ -334,9 +334,10 @@ if __name__ == "__main__":
 
     layernorm = "batchnorm"
     ordered_batch = False
+    norm = "0_1"  # "_1_1"
 
-    for norm in ["0_1"]:
-        exp = Experiment(workspace="pose-refinement", project_name="10-orient-norm",)
+    for lr in [0.1, 0.01, 0.001, 0.0001]:
+        exp = Experiment(workspace="pose-refinement", project_name=f"11-{norm}-lr",)
         # exp = Empty()
 
         if args.output is None:
@@ -353,7 +354,7 @@ if __name__ == "__main__":
             # training
             "optimiser": "adam",
             "adam_amsgrad": True,
-            "learning_rate": 1e-5,
+            "learning_rate": lr,
             "sgd_momentum": 0,
             "batch_size": 1024,
             "train_time_flip": True,
