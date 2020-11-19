@@ -259,9 +259,21 @@ class MeanNormalize3D(BaseNormalizer):
 
 class MeanNormalizeOrient(BaseNormalizer):
     def __init__(self, dataset):
-        super().__init__(dataset)
         self.field_name = "orientation"
-        super().__init__(np.nanmean(dataset.orientation, axis=0), np.nanstd(dataset.orientation, axis=0))
+        if dataset is None:
+            # mean and std must be set manually later
+            return
+
+        if isinstance(dataset, PoseDataset):
+            dataset = dataset[:]["orientation"]
+
+        assert isinstance(
+            dataset, np.ndarray
+        ), "Expected dataset to be either a PanopticSinglePersonDataset or a numpy array"
+
+        # data = dataset.reshape((len(dataset), -1))
+        data = dataset
+        super().__init__(np.nanmean(data, axis=0), np.nanstd(data, axis=0))
 
 
 class SplitToRelativeAbsAndMeanNormalize3D(object):

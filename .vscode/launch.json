@@ -22,8 +22,9 @@
             "console": "integratedTerminal",
             "cwd": "/workspace/src",
             "args": [
-                "29cbfa0fc1774b9cbb06a3573b7fb711",
-                "-r"
+                "4b1006aa968a47139217c9e7ac31e52f",
+                // "21a1850a239642e4978f2cfa0756803f",
+                // "-r"
             ]
         }
     ]

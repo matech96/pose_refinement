@@ -232,6 +232,7 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
         post_process3d=None,
         prefix="test",
         orient_norm=None,
+        normalizer_orient=None
     ):
         self.model = model
         self.dataset = dataset
@@ -271,6 +272,7 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
             self.loss = lambda p, t: np.square(p - t)
         self.is_orient = loss == "orient"
         self.orient_norm = orient_norm
+        self.normalizer_orient = normalizer_orient
 
         super().__init__(
             data_3d_mm,
@@ -302,6 +304,10 @@ class TemporalTestEvaluator(BaseMPJPECalculator):
                     pred_bo_np = pred3d[0][valid].reshape([-1, 2, 16])
                     if self.orient_norm is None:
                         pass
+                    elif self.orient_norm == "gauss":
+                        omean = self.normalizer_orient.mean
+                        ostd = self.normalizer_orient.std
+                        pred_bo_np = pred_bo_np * ostd + omean
                     elif self.orient_norm == "_1_1":
                         pred_bo_np *= np.pi
                     elif self.orient_norm == "0_1":

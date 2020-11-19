@@ -42,7 +42,7 @@ def flatten_params(params):
     return res
 
 
-def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
+def calc_loss(model, batch, config, mean_2d, std_2d, std_3d, normalizer_orient):
     loss_type = config["model"]["loss"]
     if loss_type == "l1_nan":
         pose2d = batch["temporal_pose2d"]
@@ -100,7 +100,9 @@ def calc_loss(model, batch, config, mean_2d, std_2d, std_3d):
         loss_3d = torch.nn.functional.l1_loss(pred_3d, gt_3d)
     elif loss_type == "orient":
         orient_loss = config["model"]["orient_loss"]
-        pred_bo = pred_3d.reshape(bo.shape)
+        omean = torch.tensor(normalizer_orient.mean).cuda()
+        ostd = torch.tensor(normalizer_orient.std).cuda()
+        pred_bo = pred_3d.reshape(bo.shape) * ostd + omean
         if config["orient_norm"] == "_1_1":
             if orient_loss == "proj":
                 loss_3d = orientation_loss(pred_bo * np.pi, org_pose3d, bl, root)
@@ -206,13 +208,14 @@ def run_experiment(output_path, _config, exp: Experiment):
     if _config["simple_aug"]:
         train_data.augment(False)
 
-    # normalizer_orient = MeanNormalizeOrient(train_data)
+    assert _config["orient_norm"] == "gauss"
+    normalizer_orient = MeanNormalizeOrient(train_data)
     # Load the preprocessing steps
     train_data.transform = None
     transforms_train = [
         decode_trfrm(_config["preprocess_2d"], globals())(train_data, cache=False),
         decode_trfrm(_config["preprocess_3d"], globals())(train_data, cache=False),
-        # normalizer_orient,
+        normalizer_orient,
     ]
 
     normalizer2d = transforms_train[0].normalizer
@@ -221,7 +224,7 @@ def run_experiment(output_path, _config, exp: Experiment):
     transforms_test = [
         decode_trfrm(_config["preprocess_2d"], globals())(test_data, normalizer2d),
         decode_trfrm(_config["preprocess_3d"], globals())(test_data, normalizer3d),
-        # normalizer_orient,
+        normalizer_orient,
     ]
 
     transforms_train.append(RemoveIndex())
@@ -285,13 +288,14 @@ def run_experiment(output_path, _config, exp: Experiment):
         post_process3d=get_postprocessor(_config, test_data, normalizer3d),
         prefix="test",
         orient_norm=_config["orient_norm"],
+        normalizer_orient=normalizer_orient
     )
 
     torch_train(
         exp,
         train_loader,
         model,
-        lambda m, b: calc_loss(m, b, _config, None, None, None),
+        lambda m, b: calc_loss(m, b, _config, None, None, None, normalizer_orient),
         # lambda m, b: calc_loss(
         #     m,
         #     b,
@@ -334,7 +338,7 @@ if __name__ == "__main__":
 
     layernorm = "batchnorm"
     ordered_batch = False
-    norm = "0_1"  # "_1_1"
+    norm = "gauss" # "0_1"  # "_1_1"
 
     for lr in [0.1, 0.01, 0.001, 0.0001]:
         exp = Experiment(workspace="pose-refinement", project_name=f"11-{norm}-lr",)
@@ -384,5 +388,5 @@ if __name__ == "__main__":
             "orient_norm": norm,
         }
         run_experiment(output_path, params, exp)
-        eval.main(output_path, False, exp)
-        eval.main(output_path, True, exp)
+        # eval.main(output_path, False, exp)
+        # eval.main(output_path, True, exp)
